@@ -100,6 +100,14 @@ Themes are **complete design systems**, not color presets. They must be distingu
 - Do NOT scatter `if (theme === …)` checks; add a recipe to the registry.
 - Live switching: admin merges the preset config → `body.theme-<id>` class + `/api/theme.css` regenerate; no reload of the whole app needed.
 
+### Proxied SPA theming (board)
+
+The proxied upstream SPA (`/markets/overview/*`, event-view desk) is restyled to the **same active design system** via injected CSS — it shares the theme source of truth, so switching the theme restyles both surfaces.
+
+- `boardCss(config)` in `lib/config.js` → served at `/api/board-theme.css`, injected (with `/board.css`) into every proxied page by `boardInjection()` in `server.js`.
+- It uses `getThemeRecipe(preset)` + `config.colors` to (1) remap the SPA's full CSS-variable contract (`--background-*-color`, `--text-*-color`, `--odd-*`, `--button-*`, `--linear-gradient-*`, `--betsip-*`, …) to the theme, and (2) apply the recipe's geometry/depth/material/motion (`cardRadius`, `cardShadow`, `btnRadius`, `mktRadius`, `surfaceBlur`, `ease`/`dur`) to the SPA's **semantic** component classes (`.live-card-outer`, `.league-card`, `.coupon-slider-item`, odds/buttons/inputs, …).
+- `board.css` is **theme-free** (structural helpers only) — it loads after `board-theme.css`, so keep theme tokens out of it or they will override the generated theme.
+
 ---
 
 ## Code style

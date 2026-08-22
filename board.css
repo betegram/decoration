@@ -1,50 +1,7 @@
-/* Theme overrides + mobile layout for proxied sportsbook SPA */
-
-:root {
-  color-scheme: dark;
-  --background-primary-color: #08090d !important;
-  --background-secondary-color: #101218 !important;
-  --background-third-color: #1a1d28 !important;
-  --container-color: #08090d !important;
-  --active-container: #242836 !important;
-  --text-primary-color: rgba(255, 255, 255, 0.94) !important;
-  --text-secondary-color: rgba(255, 255, 255, 0.58) !important;
-  --header-background-color: transparent !important;
-  --button-color: #0a84ff !important;
-  --button-color-hover: #409cff !important;
-  --odd-background-color: rgba(255, 255, 255, 0.06) !important;
-  --odd-selected-color: #0a84ff !important;
-  --odd-price-up-color: #30d158 !important;
-  --odd-price-down-color: #ff453a !important;
-  --betsip-background: rgba(28, 30, 40, 0.78) !important;
-  --betsip-container: rgba(18, 20, 28, 0.86) !important;
-  --sportsbook-background-container: transparent !important;
-  --primary: #0a84ff !important;
-  --secondary: #409cff !important;
-}
-
-html {
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-}
-
-body {
-  background: #08090d !important;
-  margin: 0;
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-#app,
-#initial-loader {
-  width: 100%;
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-#app {
-  min-height: 100dvh;
-}
+/* Structural helpers for the proxied SPA.
+ * Theme (colors, material, geometry, motion) is generated per active design
+ * system by /api/board-theme.css — keep this file free of theme tokens so it
+ * never overrides the generated theme (it is injected after board-theme.css). */
 
 /* Prevent horizontal scroll from wide tables / sliders */
 .splide,
@@ -56,36 +13,11 @@ body {
   max-width: 100%;
 }
 
-img,
-svg,
-video,
-iframe {
-  max-width: 100%;
-}
-
-/* Touch-friendly tap targets where we can reach odds buttons */
+/* Touch-friendly tap targets */
 button,
 a,
 [role="button"] {
   touch-action: manipulation;
-}
-
-@media (max-width: 900px) {
-  body {
-    padding-left: env(safe-area-inset-left, 0);
-    padding-right: env(safe-area-inset-right, 0);
-  }
-
-  #app {
-    padding-bottom: env(safe-area-inset-bottom, 0);
-  }
-
-  /* Full-width betslip / bottom sheets on phones */
-  [class*="betslip"],
-  [class*="bet-slip"],
-  [class*="ticket"] {
-    max-width: 100vw !important;
-  }
 }
 
 @media (max-width: 480px) {
@@ -93,7 +25,6 @@ a,
     height: 100dvh;
   }
 
-  /* Slightly tighter loader on small screens */
   .lds-ring div {
     width: 42px;
     height: 42px;
