@@ -528,7 +528,7 @@ function copyText(text) {
 }
 
 function refreshPreview() {
-  const base = meta?.sharedUrl || "/live-sports/overview/1";
+  const base = meta?.sharedUrl || "/markets/overview/1";
   const lang = langEditLocale || config?.i18n?.defaultLocale || "en";
   previewFrame.src = `${base}?lang=${encodeURIComponent(lang)}&t=${Date.now()}`;
 }

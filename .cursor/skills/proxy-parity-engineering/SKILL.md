@@ -76,9 +76,9 @@ After each fix, verify: page load, sports, live events, filters, event desk, odd
 |------|----------|-------|
 | `/api/bs/*` | `BS_UPSTREAM` | REST sports data |
 | `/api/flag/*` | `UPSTREAM` | Flag assets |
-| `/api/i18n.json` | local | i18n for designed `/live-sports/overview` UI |
-| `/assets/*`, `/live-sports/*` (except overview) | `UPSTREAM` | SPA routes + assets |
-| `/markets/*` | `UPSTREAM` (`/live-sports/*`) | Proxied upstream SPA |
-| `/live-sports/overview/*` | local | Designed AURUM markets UI |
+| `/api/i18n.json` | local | i18n for designed `/markets/overview` UI |
+| `/assets/*`, `/live-sports/*` | `UPSTREAM` | SPA routes + assets (incl. `/live-sports/overview/*`) |
+| `/live-sports/overview/*` | `UPSTREAM` | Primary — proxied upstream SPA (themed) |
+| `/markets/overview/*` | local | Designed AURUM markets UI |
 
-`/live-sports/overview/*` returns custom `index.html`. `/markets/overview/*` proxies upstream SPA.
+`/live-sports/overview/*` proxies the upstream SPA (primary, restyled). `/markets/overview/*` returns the custom `index.html`. `/` redirects to the primary SPA.

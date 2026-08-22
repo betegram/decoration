@@ -13,8 +13,8 @@ Custom sports **market discovery UI** (themes, i18n, ticket) on the same origin 
 
 | Path | Role |
 |------|------|
-| `/live-sports/overview/{sportId}` | **Designed UI** — `index.html`, `markets.js`, `styles.css`, `/api/theme.css` |
-| `/markets/overview/{sportId}` | **Proxied upstream SPA** (reference / parity baseline) |
+| `/live-sports/overview/{sportId}` | **Primary — proxied upstream SPA** (full sportsbook, restyled to the active design system) |
+| `/markets/overview/{sportId}` | **Designed UI** — `index.html`, `markets.js`, `styles.css`, `/api/theme.css` |
 | `/admin` | ERP-style site config (themes, layout, i18n, AI translate) |
 | `/api/bs/*` | Proxied sportsbook REST API |
 | `/socket/` | Proxied Socket.IO (live overview, live sports nav) |
@@ -56,7 +56,7 @@ Proxied routes must behave like upstream before cosmetic UI work.
 
 ### Phase B — Designed markets UI
 
-Custom UI at `/live-sports/overview/*` only. Changes to `markets.js`, `styles.css`, `lib/config.js`, `lib/themes.js`, `index.html`, `admin/`.
+Custom UI at `/markets/overview/*` only. Changes to `markets.js`, `styles.css`, `lib/config.js`, `lib/themes.js`, `index.html`, `admin/`.
 
 **Live overview data**
 
@@ -102,7 +102,7 @@ Themes are **complete design systems**, not color presets. They must be distingu
 
 ### Proxied SPA theming (board)
 
-The proxied upstream SPA (`/markets/overview/*`, event-view desk) is restyled to the **same active design system** via injected CSS — it shares the theme source of truth, so switching the theme restyles both surfaces.
+The proxied upstream SPA (primary, at `/live-sports/overview/*`, plus the event-view desk) is restyled to the **same active design system** via injected CSS — it shares the theme source of truth, so switching the theme restyles both surfaces.
 
 - `boardCss(config)` in `lib/config.js` → served at `/api/board-theme.css`, injected (with `/board.css`) into every proxied page by `boardInjection()` in `server.js`.
 - It uses `getThemeRecipe(preset)` + `config.colors` to (1) remap the SPA's full CSS-variable contract (`--background-*-color`, `--text-*-color`, `--odd-*`, `--button-*`, `--linear-gradient-*`, `--betsip-*`, …) to the theme, and (2) apply the recipe's geometry/depth/material/motion (`cardRadius`, `cardShadow`, `btnRadius`, `mktRadius`, `surfaceBlur`, `ease`/`dur`) to the SPA's **semantic** component classes (`.live-card-outer`, `.league-card`, `.coupon-slider-item`, odds/buttons/inputs, …).
