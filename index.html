@@ -71,7 +71,10 @@
     <aside class="ticket" id="ticket" data-i18n-attr="aria-label" data-i18n="site.ticket_aria" aria-label="Trade ticket">
       <div class="ticket-head">
         <h2 data-i18n="site.ticket_heading">Ticket</h2>
-        <button type="button" class="text-btn" id="clearTicket" data-i18n="site.ticket_clear">Clear</button>
+        <div class="ticket-head-actions">
+          <button type="button" class="text-btn" id="clearTicket" data-i18n="site.ticket_clear">Clear</button>
+          <button type="button" class="ticket-close" id="ticketClose" data-i18n-attr="aria-label" data-i18n="site.close_ticket" aria-label="Close ticket">✕</button>
+        </div>
       </div>
       <div class="ticket-body" id="ticketBody">
         <p class="ticket-empty" data-i18n="site.ticket_empty">Select a market outcome to build your ticket.</p>
@@ -105,7 +108,9 @@
     </section>
   </div>
 
-  <button type="button" class="fab" id="fabTicket" hidden>
+  <div class="ticket-backdrop" id="ticketBackdrop" aria-hidden="true"></div>
+
+  <button type="button" class="fab" id="fabTicket">
     <span data-i18n="site.ticket_label">Ticket</span> <span id="fabCount">0</span>
   </button>
 </body>

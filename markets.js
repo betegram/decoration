@@ -24,6 +24,7 @@ const state = {
   featuredComps: [],
   overview: null,
   overviewMarkets: {},
+  liveSports: null,
   filter: "all",
   search: "",
   ticket: [],
@@ -52,6 +53,9 @@ const el = {
   ticketCount: document.getElementById("ticketCount"),
   fabCount: document.getElementById("fabCount"),
   fabTicket: document.getElementById("fabTicket"),
+  ticketBackdrop: document.getElementById("ticketBackdrop"),
+  ticketClose: document.getElementById("ticketClose"),
+  ticketToggle: document.getElementById("ticketToggle"),
   stakeInput: document.getElementById("stakeInput"),
   potentialReturn: document.getElementById("potentialReturn"),
   openTrade: document.getElementById("openTrade"),
@@ -159,36 +163,18 @@ function sportMarketDef(sportId, slug) {
   return sportMarketDefs(sportId).find((d) => d.slug === slug);
 }
 
+function sportOverviewMarkets(sportId) {
+  const types = ["simple", "totals", "totals_new", "handicap", "handicap_new"];
+  return sportMarketDefs(sportId).filter((d) => types.includes(d.market_type));
+}
+
 function primaryMarketSlugs(sportId) {
-  const defs = sportMarketDefs(sportId);
-  const preferred = [
-    "match_result",
-    "match_winner_tennis",
-    "total_goals",
-    "total_games",
-    "total_points",
-  ];
-  const picked = [];
-  for (const slug of preferred) {
-    if (defs.some((d) => d.slug === slug)) picked.push(slug);
-    if (picked.length >= 2) break;
-  }
-  if (picked.length < 2) {
-    for (const d of defs) {
-      if (
-        !picked.includes(d.slug) &&
-        (d.market_type === "simple" || d.market_type === "totals_new" || d.market_type === "handicap_new")
-      ) {
-        picked.push(d.slug);
-        if (picked.length >= 2) break;
-      }
-    }
-  }
-  return picked;
+  return sportOverviewMarkets(sportId).slice(0, 2).map((d) => d.slug);
 }
 
 function mergeFixtureFromOverview(fx) {
   if (!fx?.id) return;
+  if (fx.sport_id != null && Number(fx.sport_id) !== Number(state.sportId)) return;
   const idx = state.fixtures.findIndex((f) => String(f.id) === String(fx.id));
   if (idx >= 0) {
     state.fixtures[idx] = { ...state.fixtures[idx], ...fx };
@@ -231,14 +217,13 @@ function applyOverviewPayload(payload) {
   if (Array.isArray(payload)) {
     if (!state.overview) state.overview = {};
     applyJsonPatch(state.overview, payload);
-    return;
-  }
-  if (typeof payload === "object") {
+  } else if (typeof payload === "object") {
     state.overview = payload;
     for (const fx of Object.values(payload)) {
       if (fx && typeof fx === "object" && fx.id) mergeFixtureFromOverview(fx);
     }
   }
+  if (state.dateRange === 0) state.loading = false;
 }
 
 function fixtureOverview(fx) {
@@ -250,60 +235,102 @@ function fixtureOverview(fx) {
   };
 }
 
-function selectionsFromMarket(marketObj, fx) {
+function selectionsFromMarket(marketObj, fx, def) {
   if (!marketObj) return [];
   let list;
   if (Array.isArray(marketObj)) list = marketObj;
   else if (typeof marketObj === "object") {
     list = Object.values(marketObj).sort((a, b) => Number(a?.col ?? 0) - Number(b?.col ?? 0));
   } else return [];
-  return normalizeSelections(list, fx);
+  return normalizeSelections(list, fx, def);
 }
 
 function marketsForFixture(fx, slug) {
   const merged = fixtureOverview(fx);
   const bag = merged.overview_markets;
   if (!bag || !slug || !bag[slug]) return null;
-  return selectionsFromMarket(bag[slug], merged);
+  const def = sportMarketDef(fx.sport_id, slug);
+  return selectionsFromMarket(bag[slug], merged, def);
 }
 
 /** Pull overview odds for a fixture (primary market slug from sport config) */
+function overviewFixturesArray() {
+  if (!state.overview || typeof state.overview !== "object") return [];
+  return Object.values(state.overview)
+    .filter((fx) => fx && fx.id && Number(fx.sport_id) === Number(state.sportId))
+    .map((fx) => fixtureOverview(fx));
+}
+
+function activeFixtures() {
+  if (state.dateRange === 0) return overviewFixturesArray();
+  return state.fixtures;
+}
+
+function competitionsFromFixtures(list) {
+  const map = new Map();
+  for (const fx of list) {
+    if (!fx?.competition_id) continue;
+    const id = String(fx.competition_id);
+    if (!map.has(id)) {
+      map.set(id, { id: fx.competition_id, name: fx.competition_name || id });
+    }
+  }
+  return [...map.values()].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+
 function marketsFromOverview(fixtureId, slug) {
-  const fx = state.fixtures.find((f) => String(f.id) === String(fixtureId));
+  const fx =
+    activeFixtures().find((f) => String(f.id) === String(fixtureId)) ||
+    state.fixtures.find((f) => String(f.id) === String(fixtureId));
   if (!fx) return null;
-  const marketSlug = slug || primaryMarketSlugs(fx.sport_id)[0] || "match_result";
+  const slugs = primaryMarketSlugs(fx.sport_id);
+  const marketSlug = slug || slugs[0] || sportOverviewMarkets(fx.sport_id)[0]?.slug;
+  if (!marketSlug) return null;
   return marketsForFixture(fx, marketSlug);
 }
 
-function normalizeSelections(list, fx) {
+function normalizeSelections(list, fx, def) {
+  const oddNames = def?.odd_names;
   return list
     .filter(Boolean)
     .slice(0, 3)
     .map((o, idx) => {
       const price = Number(o.price ?? o.odds ?? o.value ?? o.decimal);
-      const label =
+      let label =
         o.name_short ||
         o.name_overview ||
         o.name ||
         o.header_name ||
         o.label ||
+        oddNames?.[idx] ||
         ["1", "X", "2"][idx] ||
-        "—";
+        "";
       const status = o.status || "available";
       return {
         uuid: o.uuid || o.odd_uuid || o.id || `${fx?.id || "x"}-${idx}`,
-        label: String(label),
+        label: String(label).trim(),
         price: Number.isFinite(price) ? price : null,
         status,
         raw: o,
       };
-    });
+    })
+    .filter((o) => o.label);
 }
 
 /** Fallback synthetic labels when live odds not yet streamed */
-function placeholderMarkets(fx) {
+function placeholderMarkets(fx, slug) {
+  const def = slug ? sportMarketDef(fx.sport_id, slug) : sportOverviewMarkets(fx.sport_id)[0];
+  const oddNames = def?.odd_names?.filter((n) => n && String(n).trim()) || [];
+  if (oddNames.length) {
+    return oddNames.map((label, idx) => ({
+      uuid: `pending-${fx.id}-${slug || "m"}-${idx}`,
+      label: String(label),
+      price: null,
+      status: "pending",
+    }));
+  }
   const [home, away] = fx.participants || [tr("site.home"), tr("site.away")];
-  const three = fx.sport_id === 1 || /soccer|football/i.test(fx.sport_name || "");
+  const three = def?.three_way === true;
   const labels = three
     ? [home.split(" ")[0] || "1", tr("site.draw"), away.split(" ")[0] || "2"]
     : [home.split(" ")[0] || "1", away.split(" ")[0] || "2"];
@@ -316,7 +343,7 @@ function placeholderMarkets(fx) {
 }
 
 function filteredFixtures() {
-  let list = state.fixtures.slice();
+  let list = activeFixtures().slice();
 
   if (state.filter === "live") list = list.filter((f) => f.live);
   else if (state.filter === "upcoming") list = list.filter((f) => !f.live);
@@ -361,13 +388,18 @@ function groupFixtures(list) {
 }
 
 function renderSports() {
-  el.sportNav.innerHTML = state.sports
+  const liveList = state.liveSports && typeof state.liveSports === "object"
+    ? Object.values(state.liveSports).filter((s) => s && s.id && Number(s.fixtures_count || 0) > 0)
+    : [];
+  const source = liveList.length ? liveList : state.sports;
+  el.sportNav.innerHTML = source
     .slice()
     .sort((a, b) => Number(b.fixtures_count || 0) - Number(a.fixtures_count || 0))
-    .slice(0, 14)
     .map((s) => {
       const on = Number(s.id) === Number(state.sportId);
-      return `<button type="button" class="${on ? "is-active" : ""}" data-sport="${esc(s.id)}">${esc(s.name)}</button>`;
+      const count = Number(s.fixtures_count || 0);
+      const label = count > 0 && liveList.length ? `${s.name} (${count})` : s.name;
+      return `<button type="button" class="${on ? "is-active" : ""}" data-sport="${esc(s.id)}">${esc(label)}</button>`;
     })
     .join("");
 }
@@ -381,7 +413,8 @@ function renderDateRail() {
 }
 
 function renderFilters() {
-  const comps = state.featuredComps.slice(0, 10);
+  const fixtureComps = competitionsFromFixtures(activeFixtures());
+  const comps = (fixtureComps.length ? fixtureComps : state.featuredComps).slice(0, 12);
   const chips = [
     { id: "all", label: tr("site.filter_all") },
     { id: "live", label: tr("site.filter_live") },
@@ -425,8 +458,10 @@ function marketRowsHTML(fx) {
     })
     .filter(Boolean);
   if (rows.length) return `<div class="market-rows">${rows.join("")}</div>`;
-  let mkts = marketsFromOverview(fx.id);
-  if (!mkts?.length) mkts = placeholderMarkets(fx);
+  const primarySlug = slugs[0] || sportOverviewMarkets(fx.sport_id)[0]?.slug;
+  let mkts = primarySlug ? marketsForFixture(fx, primarySlug) : null;
+  if (!mkts?.length) mkts = marketsFromOverview(fx.id, primarySlug);
+  if (!mkts?.length) mkts = placeholderMarkets(fx, primarySlug);
   return `<div class="markets">${mkts.map((m) => pickBtnHTML(fx, m)).join("")}</div>`;
 }
 
@@ -481,17 +516,29 @@ function renderFeed() {
 
 function renderFeedInner() {
   const list = filteredFixtures();
-  const liveN = state.fixtures.filter((f) => f.live).length;
+  const fixturePool = activeFixtures();
+  const liveN = fixturePool.filter((f) => f.live).length;
   el.liveCount.textContent = String(liveN);
 
-  const sport = state.sports.find((s) => Number(s.id) === Number(state.sportId));
+  const sport =
+    (state.liveSports && Object.values(state.liveSports).find((s) => Number(s.id) === Number(state.sportId))) ||
+    state.sports.find((s) => Number(s.id) === Number(state.sportId));
   el.feedTitle.textContent = sport ? `${sport.name} ${state.feedLabel}` : state.feedLabel.charAt(0).toUpperCase() + state.feedLabel.slice(1);
   el.feedSub.textContent = tr("site.events_live_count", { count: list.length, live: liveN });
 
+  if (state.loading) {
+    el.featuredTrack.innerHTML = "";
+    el.skeletons.hidden = false;
+    el.skeletons.innerHTML = `<div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div>`;
+    el.groups.innerHTML = "";
+    el.empty.hidden = true;
+    return;
+  }
+
   // Featured: live non-esports first
-  const featured = state.fixtures
+  const featured = fixturePool
     .filter((f) => f.live && !isEsports(f))
-    .concat(state.fixtures.filter((f) => f.live && isEsports(f)))
+    .concat(fixturePool.filter((f) => f.live && isEsports(f)))
     .slice(0, 8);
   el.featuredSub.textContent = featured.length
     ? tr("site.featured_in_play", { count: featured.length })
@@ -500,13 +547,6 @@ function renderFeedInner() {
     ? featured.map(cardHTML).join("")
     : `<div class="card"><p class="ticket-empty">${esc(tr("site.no_live_events"))}</p></div>`;
 
-  if (state.loading) {
-    el.skeletons.hidden = false;
-    el.skeletons.innerHTML = `<div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div>`;
-    el.groups.innerHTML = "";
-    el.empty.hidden = true;
-    return;
-  }
   el.skeletons.hidden = true;
 
   if (!list.length) {
@@ -607,6 +647,22 @@ async function loadOverviewMarkets() {
   }
 }
 
+function applyLiveSportsPayload(payload) {
+  if (!payload) return;
+  if (Array.isArray(payload)) {
+    state.liveSports = {};
+    for (const s of payload) {
+      if (s?.id) state.liveSports[s.id] = s;
+    }
+  } else if (payload?.patch && Array.isArray(payload.patch)) {
+    if (!state.liveSports) state.liveSports = {};
+    applyJsonPatch(state.liveSports, payload.patch);
+  } else if (typeof payload === "object") {
+    state.liveSports = payload;
+  }
+  renderSports();
+}
+
 async function loadSport(sportId) {
   state.sportId = Number(sportId);
   state.filter = "all";
@@ -625,10 +681,18 @@ async function loadSport(sportId) {
     ]);
     state.fixtures = Array.isArray(fixtures) ? fixtures : [];
     state.featuredComps = Array.isArray(featured) ? featured : [];
-    state.loading = false;
+    if (state.dateRange !== 0) state.loading = false;
     renderFilters();
     renderFeed();
     joinOverviewSocket(state.sportId);
+    if (state.dateRange === 0) {
+      setTimeout(() => {
+        if (state.loading) {
+          state.loading = false;
+          renderFeed();
+        }
+      }, 8000);
+    }
   } catch (err) {
     console.error(err);
     state.loading = false;
@@ -653,47 +717,64 @@ async function reloadFixtures() {
 let socket = null;
 let joinedSport = null;
 let socketLocale = null;
+let liveSportsJoined = false;
+
+function ensureSocket() {
+  if (typeof io !== "function") return null;
+  const locale = wsLocale();
+  if (socket && socketLocale === locale) return socket;
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+    joinedSport = null;
+    liveSportsJoined = false;
+  }
+  socketLocale = locale;
+  try {
+    socket = io(`${WS_URL}/sb-${locale}`, {
+      path: WS_PATH,
+      transports: ["websocket"],
+      withCredentials: false,
+    });
+    socket.on("connect", () => {
+      if (!liveSportsJoined) {
+        socket.emit("join-liveSports");
+        liveSportsJoined = true;
+      }
+      if (joinedSport) socket.emit("join-liveSportOverview", joinedSport);
+    });
+    socket.on("liveSports", (payload) => {
+      applyLiveSportsPayload(payload);
+    });
+    socket.on("liveSportsUpdate", (payload) => {
+      applyLiveSportsPayload(payload);
+    });
+    socket.on("liveSportOverview", (payload) => {
+      applyOverviewPayload(payload);
+      renderFeed();
+    });
+    socket.on("liveSportOverviewUpdate", (payload) => {
+      applyOverviewPayload(payload);
+      renderFeed();
+    });
+    socket.on("connect_error", (err) => {
+      console.warn("socket connect_error", err.message);
+    });
+  } catch (err) {
+    console.warn("socket unavailable", err);
+    socket = null;
+  }
+  return socket;
+}
 
 function joinOverviewSocket(sportId) {
-  if (typeof io !== "function") return;
-  const locale = wsLocale();
-  if (!socket || socketLocale !== locale) {
-    if (socket) {
-      socket.disconnect();
-      socket = null;
-      joinedSport = null;
-    }
-    socketLocale = locale;
-    try {
-      socket = io(`${WS_URL}/sb-${locale}`, {
-        path: WS_PATH,
-        transports: ["websocket"],
-        withCredentials: false,
-      });
-      socket.on("connect", () => {
-        if (joinedSport) socket.emit("join-liveSportOverview", joinedSport);
-      });
-      socket.on("liveSportOverview", (payload) => {
-        applyOverviewPayload(payload);
-        renderFeed();
-      });
-      socket.on("liveSportOverviewUpdate", (payload) => {
-        applyOverviewPayload(payload);
-        renderFeed();
-      });
-      socket.on("connect_error", (err) => {
-        console.warn("socket connect_error", err.message);
-      });
-    } catch (err) {
-      console.warn("socket unavailable", err);
-      return;
-    }
-  }
+  const s = ensureSocket();
+  if (!s) return;
   if (joinedSport && joinedSport !== sportId) {
-    socket.emit("leave-liveSportOverview", joinedSport);
+    s.emit("leave-liveSportOverview", joinedSport);
   }
   joinedSport = sportId;
-  if (socket.connected) socket.emit("join-liveSportOverview", sportId);
+  if (s.connected) s.emit("join-liveSportOverview", sportId);
 }
 
 /* —— Events —— */
@@ -709,12 +790,17 @@ if (el.dateRail) {
     if (!btn) return;
     state.dateRange = Number(btn.dataset.date);
     state.loading = true;
+    if (state.dateRange !== 0) state.overview = null;
     renderDateRail();
     renderFeed();
     reloadFixtures().finally(() => {
-      state.loading = false;
-      renderFeed();
-      joinOverviewSocket(state.sportId);
+      if (state.dateRange !== 0) {
+        state.loading = false;
+        renderFeed();
+      } else {
+        state.overview = null;
+        joinOverviewSocket(state.sportId);
+      }
     });
   });
 }
@@ -782,6 +868,16 @@ document.getElementById("clearTicket").addEventListener("click", () => {
   renderFeed();
 });
 
+function isMobileTicket() {
+  return window.matchMedia("(max-width: 1100px)").matches;
+}
+
+function setTicketOpen(open) {
+  el.ticket.classList.toggle("is-open", open);
+  document.body.classList.toggle("is-ticket-open", open && isMobileTicket());
+  if (el.ticketToggle) el.ticketToggle.setAttribute("aria-expanded", String(open));
+}
+
 el.stakeInput.addEventListener("input", () => {
   state.stake = Number(el.stakeInput.value) || 0;
   renderTicket();
@@ -793,11 +889,14 @@ el.openTrade.addEventListener("click", () => {
   openDesk(last.fixtureId, last.eventLabel);
 });
 
-document.getElementById("ticketToggle").addEventListener("click", () => {
-  el.ticket.classList.toggle("is-open");
+el.ticketToggle.addEventListener("click", () => {
+  setTicketOpen(!el.ticket.classList.contains("is-open"));
 });
-el.fabTicket.addEventListener("click", () => {
-  el.ticket.classList.add("is-open");
+el.fabTicket.addEventListener("click", () => setTicketOpen(true));
+if (el.ticketBackdrop) el.ticketBackdrop.addEventListener("click", () => setTicketOpen(false));
+if (el.ticketClose) el.ticketClose.addEventListener("click", () => setTicketOpen(false));
+window.matchMedia("(max-width: 1100px)").addEventListener("change", (e) => {
+  if (!e.matches) setTicketOpen(false);
 });
 
 function sportFromPath() {
@@ -832,7 +931,10 @@ function applySiteConfig(cfg) {
   document.body.classList.add(`layout-${cfg.layout?.preset || "standard"}`);
   document.body.classList.add(`density-${cfg.structure?.density || "normal"}`);
   if (cfg.layout?.showFeatured === false) document.body.classList.add("hide-featured");
-  if (cfg.layout?.showTicket === false) document.body.classList.add("hide-ticket");
+  if (cfg.layout?.showTicket === false) {
+    document.body.classList.add("hide-ticket");
+    setTicketOpen(false);
+  }
 }
 
 async function boot() {
@@ -841,6 +943,7 @@ async function boot() {
   el.skeletons.innerHTML = `<div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div>`;
   let startSport = sportFromPath() || 1;
   await loadRuntimeConfig();
+  ensureSocket();
   try {
     await window.AurumI18n.initI18n();
     window.AurumI18n.applyDomI18n();
