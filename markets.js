@@ -430,6 +430,14 @@ function renderFilters() {
     .join("");
 }
 
+function marketsGridClass(count) {
+  return count <= 2 ? "markets markets-2up" : "markets";
+}
+
+function marketsButtonsHTML(fx, mkts) {
+  return `<div class="${marketsGridClass(mkts.length)}">${mkts.map((m) => pickBtnHTML(fx, m)).join("")}</div>`;
+}
+
 function pickBtnHTML(fx, m) {
   const disabled =
     m.status === "suspended" ||
@@ -453,7 +461,7 @@ function marketRowsHTML(fx) {
       if (!mkts?.length) return "";
       return `<div class="market-row">
         <div class="market-row-label">${esc(def?.name || slug)}</div>
-        <div class="markets">${mkts.map((m) => pickBtnHTML(fx, m)).join("")}</div>
+        ${marketsButtonsHTML(fx, mkts)}
       </div>`;
     })
     .filter(Boolean);
@@ -462,7 +470,7 @@ function marketRowsHTML(fx) {
   let mkts = primarySlug ? marketsForFixture(fx, primarySlug) : null;
   if (!mkts?.length) mkts = marketsFromOverview(fx.id, primarySlug);
   if (!mkts?.length) mkts = placeholderMarkets(fx, primarySlug);
-  return `<div class="markets">${mkts.map((m) => pickBtnHTML(fx, m)).join("")}</div>`;
+  return marketsButtonsHTML(fx, mkts);
 }
 
 function cardHTML(fx) {
@@ -872,6 +880,19 @@ function isMobileTicket() {
   return window.matchMedia("(max-width: 1100px)").matches;
 }
 
+function syncChromeMetrics() {
+  const topbar = document.querySelector(".topbar");
+  if (!topbar) return;
+  const height = topbar.getBoundingClientRect().height;
+  document.documentElement.style.setProperty("--topbar-height", `${Math.ceil(height)}px`);
+  document.documentElement.style.setProperty("--filter-sticky-top", `${Math.ceil(height)}px`);
+  document.documentElement.style.setProperty("--ticket-sticky-top", `${Math.ceil(height) + 12}px`);
+}
+
+function scheduleChromeMetrics() {
+  requestAnimationFrame(() => syncChromeMetrics());
+}
+
 function setTicketOpen(open) {
   el.ticket.classList.toggle("is-open", open);
   document.body.classList.toggle("is-ticket-open", open && isMobileTicket());
@@ -935,6 +956,7 @@ function applySiteConfig(cfg) {
     document.body.classList.add("hide-ticket");
     setTicketOpen(false);
   }
+  scheduleChromeMetrics();
 }
 
 async function boot() {
@@ -972,6 +994,8 @@ async function boot() {
     showLoadError(tr("site.error_load_markets"), err.message || "API request failed");
   }
   renderTicket();
+  scheduleChromeMetrics();
+  window.addEventListener("resize", scheduleChromeMetrics);
 }
 
 boot();
