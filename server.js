@@ -712,6 +712,10 @@ const server = createServer(async (req, res) => {
       redirect(res, sharedPath(1));
       return;
     }
+    if (pathname === "/live-sports/overview" || pathname === "/live-sports/overview/") {
+      redirect(res, sharedPath(1));
+      return;
+    }
     if (LIVE_OVERVIEW_RE.test(pathname)) {
       await serveMarketsShell(res, method);
       return;

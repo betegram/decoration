@@ -29,6 +29,21 @@ Living document. Update after each differential run.
 | 5 | `/board.css` | N/A | Was 200 **HTML** (broken) | **ASSET** — fixed: serve static before catch-all |
 | 6 | WebSocket | Direct to `bs-iframedev1` | Browser cross-origin WS | **WEBSOCKET** — not proxied; relies on upstream accepting Origin |
 
+## Differential snapshot (2026-08-22, run 2)
+
+Verified designed-UI data parity end-to-end (A = BS upstream direct, B = proxy):
+
+| Step | Resource | A (direct) | B (proxy) | Divergence |
+|------|----------|-----------|-----------|------------|
+| 1 | `/live-sports/overview` (no id) | SPA shell, client routes to default sport | 200 **upstream shell** (empty `#app`) — designed UI not served | **REWRITE/ROUTE** — fixed: redirect bare path → `sharedPath(1)` |
+| 2 | `/api/bs/sports/overview_markets` | 200 19KB | 200 19KB | OK |
+| 3 | `/api/bs/fixtures/1/daterange/0` | **hangs w/o header; 200 743KB with `utc-offset`** | same | OK — client already sends `utc-offset` (`markets.js` `api()`); proxy forwards it |
+| 4 | `/api/bs/sport/1/fixtures-upcoming/3` | 200 4.2MB | (unused by designed UI) | Reference endpoint for pre-match |
+| 5 | `/live-sports/event-view/{id}` (trade iframe) | SPA + assets 200 | SPA + assets 200 (`index-*.js` 5.2MB) | OK — trading delegated to upstream desk |
+
+Bundle-confirmed upstream contract:
+`GET /fixtures/{sport_id}/daterange/{date_range}` with headers `utc-offset: moment().format("Z")`, `Accept-Language`; `date_range` is a numeric day offset (0=today).
+
 ## First divergences to fix (priority)
 
 1. **DOCUMENT / ROUTE** — `/markets/overview/*` proxies upstream SPA (`/markets/*` → upstream `/live-sports/*`). Designed AURUM UI at `/live-sports/overview/*`.
