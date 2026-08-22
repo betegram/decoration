@@ -894,8 +894,14 @@ function scheduleChromeMetrics() {
 }
 
 function setTicketOpen(open) {
+  if (!isMobileTicket()) {
+    el.ticket.classList.remove("is-open");
+    document.body.classList.remove("is-ticket-open");
+    if (el.ticketToggle) el.ticketToggle.setAttribute("aria-expanded", "false");
+    return;
+  }
   el.ticket.classList.toggle("is-open", open);
-  document.body.classList.toggle("is-ticket-open", open && isMobileTicket());
+  document.body.classList.toggle("is-ticket-open", open);
   if (el.ticketToggle) el.ticketToggle.setAttribute("aria-expanded", String(open));
 }
 
