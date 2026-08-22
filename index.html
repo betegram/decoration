@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AURUM Markets</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/api/theme.css" />
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" defer></script>
+  <script src="/markets.js" defer></script>
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <span class="word" id="brandName">AURUM</span>
+      <span class="tag" id="brandTag">Markets</span>
+    </div>
+
+    <label class="search">
+      <span class="sr">Search</span>
+      <input id="searchInput" type="search" placeholder="Search teams, leagues, events…" autocomplete="off" />
+    </label>
+
+    <div class="top-meta">
+      <span class="live-chip" id="liveChip"><i></i> Live <b id="liveCount">0</b></span>
+      <button type="button" class="icon-btn" id="ticketToggle" aria-label="Open ticket">
+        Ticket <span class="badge" id="ticketCount">0</span>
+      </button>
+    </div>
+  </header>
+
+  <nav class="sport-nav" id="sportNav" aria-label="Sports"></nav>
+
+  <div class="filter-rail-wrap">
+    <div class="filter-rail" id="filterRail" aria-label="Filters"></div>
+  </div>
+
+  <div class="layout">
+    <main class="feed" id="feed" aria-live="polite">
+      <section class="featured" id="featured">
+        <div class="section-head">
+          <h2 id="featuredTitle">Live now</h2>
+          <span class="muted" id="featuredSub">Highest intensity markets</span>
+        </div>
+        <div class="featured-track" id="featuredTrack"></div>
+      </section>
+
+      <section class="market-feed">
+        <div class="section-head">
+          <h2 id="feedTitle">Markets</h2>
+          <span class="muted" id="feedSub">Discover events</span>
+        </div>
+        <div class="skeletons" id="skeletons" hidden></div>
+        <div class="groups" id="groups"></div>
+        <div class="empty" id="empty" hidden>
+          <h3>No markets match</h3>
+          <p>Try another sport, filter, or search term.</p>
+        </div>
+      </section>
+    </main>
+
+    <aside class="ticket" id="ticket" aria-label="Trade ticket">
+      <div class="ticket-head">
+        <h2>Ticket</h2>
+        <button type="button" class="text-btn" id="clearTicket">Clear</button>
+      </div>
+      <div class="ticket-body" id="ticketBody">
+        <p class="ticket-empty">Select a market outcome to build your ticket.</p>
+      </div>
+      <div class="ticket-foot">
+        <label class="stake">
+          <span>Stake</span>
+          <input id="stakeInput" type="number" min="0" step="1" value="10" />
+        </label>
+        <div class="returns">
+          <span>Potential return</span>
+          <strong id="potentialReturn">—</strong>
+        </div>
+        <button type="button" class="primary" id="openTrade" disabled>Open trade desk</button>
+        <p class="fine">Opens the live event desk to complete the trade on the connected engine.</p>
+      </div>
+    </aside>
+  </div>
+
+  <div class="desk" id="desk" hidden>
+    <div class="desk-backdrop" data-close-desk></div>
+    <section class="desk-panel" role="dialog" aria-modal="true" aria-label="Event desk">
+      <header class="desk-bar">
+        <div>
+          <p class="desk-kicker">Event desk</p>
+          <h3 id="deskTitle">Markets</h3>
+        </div>
+        <button type="button" class="icon-btn" data-close-desk aria-label="Close">✕</button>
+      </header>
+      <iframe id="deskFrame" title="Event trading desk" allow="fullscreen; clipboard-write"></iframe>
+    </section>
+  </div>
+
+  <button type="button" class="fab" id="fabTicket" hidden>
+    Ticket <span id="fabCount">0</span>
+  </button>
+</body>
+</html>

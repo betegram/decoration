@@ -1,0 +1,59 @@
+{
+  "branding": {
+    "name": "AURUM",
+    "tag": "Markets",
+    "searchPlaceholder": "Search teams, leagues, events…",
+    "featuredTitle": "Live now",
+    "featuredSub": "Highest intensity markets",
+    "feedTitle": "Markets",
+    "pageTitle": "AURUM Markets"
+  },
+  "layout": {
+    "preset": "standard",
+    "maxWidth": 1400,
+    "ticketWidth": 320,
+    "cardColumns": 2,
+    "showFeatured": true,
+    "showTicket": true
+  },
+  "colors": {
+    "background": "#07080c",
+    "backgroundSecondary": "#0c0e14",
+    "panel": "#10121a",
+    "panelOpacity": 82,
+    "accent": "#0a84ff",
+    "accentBright": "#409cff",
+    "text": "#f0f0f5",
+    "textMuted": "#8c8c99",
+    "textFaint": "#575766",
+    "live": "#ff453a",
+    "success": "#30d158",
+    "border": "#ffffff14",
+    "borderStrong": "#ffffff24",
+    "glowBlue": "#409cff24",
+    "glowPurple": "#5e5ce614"
+  },
+  "typography": {
+    "fontFamily": "system",
+    "baseSize": "15",
+    "headingSize": "17",
+    "labelSize": "12",
+    "weight": "600"
+  },
+  "structure": {
+    "radius": "16",
+    "radiusLg": "22",
+    "density": "normal",
+    "headerBlur": "22",
+    "cardGap": "12",
+    "sectionGap": "24"
+  },
+  "board": {
+    "background": "#08090d",
+    "accent": "#0a84ff",
+    "text": "#f0f0f5"
+  },
+  "theme": {
+    "preset": "polymarket"
+  }
+}

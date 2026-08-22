@@ -1,0 +1,28 @@
+/* Minimal dark theme overrides for the proxied event desk */
+
+:root {
+  color-scheme: dark;
+  --background-primary-color: #08090d !important;
+  --background-secondary-color: #101218 !important;
+  --background-third-color: #1a1d28 !important;
+  --container-color: #08090d !important;
+  --active-container: #242836 !important;
+  --text-primary-color: rgba(255, 255, 255, 0.94) !important;
+  --text-secondary-color: rgba(255, 255, 255, 0.58) !important;
+  --header-background-color: transparent !important;
+  --button-color: #0a84ff !important;
+  --button-color-hover: #409cff !important;
+  --odd-background-color: rgba(255, 255, 255, 0.06) !important;
+  --odd-selected-color: #0a84ff !important;
+  --odd-price-up-color: #30d158 !important;
+  --odd-price-down-color: #ff453a !important;
+  --betsip-background: rgba(28, 30, 40, 0.78) !important;
+  --betsip-container: rgba(18, 20, 28, 0.86) !important;
+  --sportsbook-background-container: transparent !important;
+  --primary: #0a84ff !important;
+  --secondary: #409cff !important;
+}
+
+body {
+  background: #08090d !important;
+}

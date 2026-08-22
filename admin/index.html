@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Operator Login — AURUM</title>
+  <link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+  <div id="loginView" class="ig-login">
+    <div class="ig-login-bg" aria-hidden="true"></div>
+    <div class="ig-login-wrap">
+      <aside class="ig-promo">
+        <div class="ig-promo-badge">VIP OPERATOR</div>
+        <h1>Control your<br /><span>live sports</span> experience</h1>
+        <p>Customize layouts, colors, branding, and publish to your players in real time.</p>
+        <ul class="ig-perks">
+          <li>Live theme publishing</li>
+          <li>Layout presets & color studio</li>
+          <li>Same URL paths as your sportsbook</li>
+        </ul>
+        <div class="ig-promo-glow"></div>
+      </aside>
+
+      <section class="ig-auth-card">
+        <div class="ig-auth-head">
+          <div class="ig-logo-ring"><span class="ig-logo"></span></div>
+          <h2>Operator sign in</h2>
+          <p>Secure access to your brand control center</p>
+        </div>
+
+        <form id="loginForm" class="ig-form">
+          <label class="ig-field">
+            <span>Username</span>
+            <div class="ig-input-wrap">
+              <span class="ig-icon" aria-hidden="true">👤</span>
+              <input name="username" autocomplete="username" placeholder="Enter username" required />
+            </div>
+          </label>
+          <label class="ig-field">
+            <span>Password</span>
+            <div class="ig-input-wrap">
+              <span class="ig-icon" aria-hidden="true">🔒</span>
+              <input id="passwordInput" name="password" type="password" autocomplete="current-password" placeholder="Enter password" required />
+              <button type="button" id="togglePwd" class="ig-eye" aria-label="Show password">Show</button>
+            </div>
+          </label>
+          <div class="ig-row">
+            <label class="ig-check"><input type="checkbox" id="rememberMe" checked /> Remember me</label>
+          </div>
+          <p id="loginError" class="ig-error" hidden></p>
+          <button type="submit" id="loginBtn" class="ig-btn-login">
+            <span class="ig-btn-text">LOGIN</span>
+            <span class="ig-btn-shine"></span>
+          </button>
+          <p class="ig-demo-hint">Demo access: <strong>admin</strong> / <strong>aurum2026</strong></p>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <div id="appView" class="app" hidden>
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <span class="logo ig-logo-sm"></span>
+        <div>
+          <strong>AURUM Studio</strong>
+          <span>Operator control</span>
+        </div>
+      </div>
+      <nav id="nav">
+        <button type="button" class="nav-item is-active" data-section="themes">Themes</button>
+        <button type="button" class="nav-item" data-section="general">General</button>
+        <button type="button" class="nav-item" data-section="layout">Layout</button>
+        <button type="button" class="nav-item" data-section="colors">Colors</button>
+        <button type="button" class="nav-item" data-section="typography">Typography</button>
+        <button type="button" class="nav-item" data-section="structure">Structure</button>
+        <button type="button" class="nav-item" data-section="board">Event desk</button>
+        <button type="button" class="nav-item" data-section="share">Share & publish</button>
+      </nav>
+      <div class="sidebar-foot">
+        <button type="button" id="logoutBtn" class="btn ghost light">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="top">
+        <div>
+          <h2 id="sectionTitle">General</h2>
+          <p id="sectionDesc">Branding, titles, and page identity</p>
+        </div>
+        <div class="top-actions">
+          <button type="button" id="resetBtn" class="btn ghost">Reset section</button>
+          <button type="button" id="applyBtn" class="btn primary gold">Apply changes</button>
+        </div>
+      </header>
+
+      <div class="content-grid">
+        <section class="panel" id="panel"></section>
+        <aside class="preview">
+          <div class="preview-head">
+            <strong>Live preview</strong>
+            <span id="previewNote">Updates after Apply</span>
+          </div>
+          <iframe id="previewFrame" title="Site preview"></iframe>
+          <div class="preview-url">
+            <label>Shared URL</label>
+            <div class="url-row">
+              <input id="sharedUrl" readonly />
+              <button type="button" id="copyUrl" class="btn ghost">Copy</button>
+            </div>
+            <p class="hint">Same path as the original site — only your base URL differs.</p>
+            <p class="hint muted" id="originalUrl"></p>
+          </div>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="/admin/admin.js" type="module"></script>
+</body>
+</html>
