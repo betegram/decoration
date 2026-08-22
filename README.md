@@ -34,6 +34,10 @@ When `MONGODB_URI` is set, site config and admin credentials are stored in Mongo
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Admin panel login |
 | `UPSTREAM` / `BS_UPSTREAM` | Sportsbook API hosts (optional) |
 
+### Nginx (ui.kycland.xyz)
+
+See [`nginx/README.md`](nginx/README.md). Proxies the domain to `127.0.0.1:${PORT}`.
+
 ## Admin
 
 The ERP-style admin panel lets you change branding, **12 predefined design themes**,
