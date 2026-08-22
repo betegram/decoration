@@ -77,11 +77,11 @@ Desktop and mobile overrides must use explicit breakpoints (`min-width: 1101px` 
 
 ### Desktop ticket (trade panel)
 
-- Ticket is **outside** `page-shell` in `index.html` (sibling, not inside the feed grid).
-- Desktop (>1100px): `position: fixed` **rail** aligned to the content column via `--ticket-rail-right` (set in `syncChromeMetrics()` in `markets.js`).
-- Feed reserves space: `page-shell` `padding-right` = ticket width + gap + gutter.
-- Do **not** put the ticket back inside the feed flex/grid or use sticky positioning that overlaps cards.
-- Mobile (≤1100px): bottom sheet (`display: none` until `.is-open`), FAB, backdrop; `setTicketOpen()` is mobile-only.
+- Ticket is **inside** `page-shell` as grid column 2 (sibling of `.layout`).
+- Desktop (>1100px): `page-shell` is a 2-col CSS grid; ticket is `position: sticky` in column 2 (no JS positioning).
+- `body { overflow-x: clip }` — NOT `hidden`. `hidden` silently creates a scroll container that breaks `position: sticky`.
+- Layout presets: `wide` widens the ticket column; `feed`/`hide-ticket` collapse to a single column.
+- Mobile (≤1100px): grid collapses to 1 col; ticket becomes a bottom sheet (`display: none` until `.is-open`), FAB, backdrop; `setTicketOpen()` is mobile-only.
 
 ### Event cards
 
@@ -89,9 +89,16 @@ Desktop and mobile overrides must use explicit breakpoints (`min-width: 1101px` 
 - Featured carousel: fixed column width; limit extra market rows in the strip.
 - Test at ~1400px desktop and ~390px mobile; check heavy-shadow themes (neomorphism, brutalist, cyber).
 
-### Themes
+### Themes — engine architecture
 
-Themes are full design systems (surface tokens in `lib/theme-tokens.js`, effects in `lib/themes.js`), not color-only swaps.
+Themes are **complete design systems**, not color presets. They must be distinguishable in grayscale (geometry, depth/shadow model, motion, component construction).
+
+- `lib/theme-engine.js` — `THEME_RECIPES` registry (one recipe per theme) + `renderThemeCss(preset, config)` generator. Each recipe controls material (surface/opacity/blur/shadow/highlight), geometry (radii, control shape), depth (elevation model), motion (duration/easing/interaction), and per-component recipes (nav, cards, market buttons, chips, inputs, primary/fab, modal, skeletons, scrollbar, focus/hover/active states).
+- The generator emits CSS scoped to `body.theme-<id>` so the same markup renders in a different visual language.
+- `lib/config.js` `themeCss()` = base `:root` (colors/fonts from config) + structural layout + the engine layer.
+- `lib/themes.js` `THEME_PRESETS` = admin/server preset registry (label/concept/desc/config patch). Adding a theme means: add a preset in `THEME_PRESETS` and a recipe in `THEME_RECIPES` with the same id.
+- Do NOT scatter `if (theme === …)` checks; add a recipe to the registry.
+- Live switching: admin merges the preset config → `body.theme-<id>` class + `/api/theme.css` regenerate; no reload of the whole app needed.
 
 ---
 

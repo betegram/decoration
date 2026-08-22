@@ -273,6 +273,15 @@ body.layout-feed .page-shell {
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
+.featured-track::-webkit-scrollbar,
+.ticket-body::-webkit-scrollbar { width: 8px; height: 8px; }
+.featured-track::-webkit-scrollbar-track,
+.ticket-body::-webkit-scrollbar-track { background: transparent; }
+.featured-track::-webkit-scrollbar-thumb,
+.ticket-body::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb, rgba(255, 255, 255, 0.16));
+  border-radius: 999px;
+}
 .featured-track > .card {
   width: 100%;
   max-width: 100%;
