@@ -29,6 +29,15 @@ import {
   keysForAiTranslate,
 } from "./lib/i18n.js";
 import { translateWithOpenAI, isOpenAiConfigured } from "./lib/openai.js";
+import { buildPublicLinks } from "./lib/links.js";
+import {
+  computeSourceHash,
+  prepareConfigAfterSave,
+  scheduleTranslationJob,
+  getJobSnapshot,
+  runTranslationJob,
+  localesNeedingTranslation,
+} from "./lib/translation-pipeline.js";
 import { proxyLog, PROXY_DEBUG } from "./lib/proxy-debug.js";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -404,8 +413,63 @@ async function handleAdminApi(req, res, pathname, method) {
 
   if (pathname === "/admin/api/config" && method === "PUT") {
     const patch = await readJson(req);
-    cachedConfig = await saveSiteConfig(patch);
-    send(res, 200, JSON.stringify(cachedConfig), "application/json", method);
+    const prev = await getConfig();
+    const prevHash = computeSourceHash(prev);
+    const prepared = prepareConfigAfterSave(patch, prevHash);
+    cachedConfig = await saveSiteConfig(prepared);
+    const needs = localesNeedingTranslation(cachedConfig);
+    if (needs.length && isOpenAiConfigured()) {
+      scheduleTranslationJob(cachedConfig, async (cfg) => {
+        cachedConfig = await saveSiteConfig(cfg);
+        return cachedConfig;
+      });
+    }
+    send(
+      res,
+      200,
+      JSON.stringify({ ...cachedConfig, translationJob: getJobSnapshot() }),
+      "application/json",
+      method
+    );
+    return true;
+  }
+
+  if (pathname === "/admin/api/translation/status" && method === "GET") {
+    const config = await getConfig();
+    send(
+      res,
+      200,
+      JSON.stringify({
+        job: getJobSnapshot() || config.translationMeta?.job || null,
+        locales: config.translationMeta?.locales || {},
+        revision: config.translationMeta?.revision || 0,
+        sourceHash: config.translationMeta?.sourceHash || "",
+        sourceLocale: config.i18n?.defaultLocale,
+        openAi: isOpenAiConfigured(),
+      }),
+      "application/json",
+      method
+    );
+    return true;
+  }
+
+  if (pathname === "/admin/api/translation/retry" && method === "POST") {
+    const body = await readJson(req);
+    const locale = String(body.locale || "").trim();
+    if (!locale) {
+      send(res, 400, JSON.stringify({ error: "locale required" }), "application/json", method);
+      return true;
+    }
+    if (!isOpenAiConfigured()) {
+      send(res, 503, JSON.stringify({ error: "OPENAI_API_KEY not configured" }), "application/json", method);
+      return true;
+    }
+    const config = await getConfig();
+    scheduleTranslationJob(config, async (cfg) => {
+      cachedConfig = await saveSiteConfig(cfg);
+      return cachedConfig;
+    }, { locales: [locale] });
+    send(res, 200, JSON.stringify({ ok: true, job: getJobSnapshot() }), "application/json", method);
     return true;
   }
 
@@ -413,6 +477,8 @@ async function handleAdminApi(req, res, pathname, method) {
     const host = req.headers.host || `localhost:${PORT}`;
     const proto = req.headers["x-forwarded-proto"] || "http";
     const adminLocale = resolveLocale(req, await getConfig());
+    const siteConfig = await getConfig();
+    const links = buildPublicLinks({ proto, host, config: siteConfig });
     send(
       res,
       200,
@@ -420,18 +486,24 @@ async function handleAdminApi(req, res, pathname, method) {
         presets: LAYOUT_PRESETS,
         themes: THEME_PRESETS,
         fonts: Object.keys(FONT_STACKS),
-        sharedUrl: `${proto}://${host}${sharedPath(1)}`,
-        proxyReferenceUrl: `${proto}://${host}${PROXY_OVERVIEW_PATH}`,
+        sharedUrl: links.primary.url,
+        proxyReferenceUrl: links.secondary.url,
         originalUrl: `${UPSTREAM}${sharedPath(1)}`,
+        links,
         upstream: UPSTREAM,
         i18n: {
           locales: LOCALE_META,
           catalog: catalogForScope("site"),
           adminCatalog: catalogForScope("admin"),
           openAi: isOpenAiConfigured(),
-          defaultLocale: (await getConfig()).i18n?.defaultLocale,
+          defaultLocale: siteConfig.i18n?.defaultLocale,
+          glossary: siteConfig.i18n?.glossary,
         },
-        adminI18n: adminBundle(await getConfig(), adminLocale),
+        translation: {
+          meta: siteConfig.translationMeta || {},
+          job: getJobSnapshot() || siteConfig.translationMeta?.job || null,
+        },
+        adminI18n: adminBundle(siteConfig, adminLocale),
       }),
       "application/json",
       method

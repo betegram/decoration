@@ -1,3 +1,5 @@
+import { renderLinksPanel, bindCopyButtons } from "./components/links.js";
+
 const loginView = document.getElementById("loginView");
 const appView = document.getElementById("appView");
 const loginForm = document.getElementById("loginForm");
@@ -6,9 +8,10 @@ const panel = document.getElementById("panel");
 const sectionTitle = document.getElementById("sectionTitle");
 const sectionDesc = document.getElementById("sectionDesc");
 const previewFrame = document.getElementById("previewFrame");
-const sharedUrlInput = document.getElementById("sharedUrl");
-const originalUrlEl = document.getElementById("originalUrl");
+const previewLinks = document.getElementById("previewLinks");
 const toast = document.getElementById("toast");
+const sidebar = document.getElementById("sidebar");
+const drawerBackdrop = document.getElementById("drawerBackdrop");
 
 let config = null;
 let meta = null;
@@ -117,19 +120,63 @@ const SECTIONS = {
     ],
   },
   share: {
-    title: "Share & publish",
-    desc: "Public URL mirrors the original site path",
+    title: "Publish",
+    desc: "Public URLs and translation status",
     shareOnly: true,
   },
   languages: {
-    title: "Languages & translations",
-    desc: "Default locale, enabled languages, and AI-assisted translations",
+    title: "Languages",
+    desc: "Source language, auto-translation, and glossary",
     languagesOnly: true,
   },
 };
 
 let langEditLocale = "en";
-let langEditScope = "site";
+let translationPollTimer = null;
+
+function renderPreviewLinks() {
+  if (!previewLinks || !meta?.links) return;
+  previewLinks.innerHTML = renderLinksPanel(meta.links);
+  bindCopyButtons(previewLinks);
+  previewLinks.querySelectorAll("[data-copy]").forEach((btn) => {
+    btn.addEventListener("click", () => showToast("Copied to clipboard"));
+  });
+}
+
+function statusLabel(status) {
+  const map = {
+    source: "Source",
+    pending: "Pending",
+    generating: "Generating",
+    generated: "Auto translated",
+    published: "Published",
+    outdated: "Outdated",
+    failed: "Failed",
+  };
+  return map[status] || status || "—";
+}
+
+async function pollTranslationStatus() {
+  try {
+    const st = await api("/admin/api/translation/status");
+    meta.translation = { meta: { locales: st.locales }, job: st.job };
+    if (st.job?.running) {
+      if (section === "languages" || section === "share") renderPanel();
+      translationPollTimer = setTimeout(pollTranslationStatus, 2000);
+    } else {
+      clearTimeout(translationPollTimer);
+      if (section === "languages") renderPanel();
+      renderPreviewLinks();
+    }
+  } catch {
+    clearTimeout(translationPollTimer);
+  }
+}
+
+function startTranslationPoll() {
+  clearTimeout(translationPollTimer);
+  pollTranslationStatus();
+}
 
 function get(obj, path) {
   return path.split(".").reduce((a, k) => (a == null ? undefined : a[k]), obj);
@@ -212,19 +259,22 @@ function renderPanel() {
   }
 
   if (def.shareOnly) {
+    const job = meta?.translation?.job;
+    const jobHtml = job?.running
+      ? `<div class="job-banner">Generating ${job.pending?.length || 0} translation(s)…</div>`
+      : "";
     panel.innerHTML = `
+      ${jobHtml}
+      <div class="field-card full">${renderLinksPanel(meta?.links)}</div>
       <div class="field-card full">
-        <h3>Published URL</h3>
-        <p class="hint">Users open this link — the designed AURUM markets page (<code>/live-sports/overview/1</code>).</p>
-        <div class="url-row">
-          <input id="shareCopy" readonly value="${sharedUrlInput.value}" />
-          <button type="button" class="btn primary" id="copyShare">Copy URL</button>
-        </div>
-        <p class="hint muted">Proxied upstream SPA: <code>${meta?.proxyReferenceUrl || ""}</code></p>
-        <p class="hint muted">Original host: ${meta?.originalUrl || ""}</p>
-        <p class="hint">After editing any section, click <strong>Apply changes</strong>. The preview and live site update immediately.</p>
+        <h3>Workflow</h3>
+        <p class="hint">Edit source content in <strong>General</strong> (English/source language). Click <strong>Save & publish</strong>. The system auto-translates enabled languages in the background.</p>
+        <p class="hint muted">Original upstream: ${escHtml(meta?.originalUrl || "")}</p>
       </div>`;
-    document.getElementById("copyShare").onclick = () => copyText(sharedUrlInput.value);
+    bindCopyButtons(panel);
+    panel.querySelectorAll("[data-copy]").forEach((btn) => {
+      btn.addEventListener("click", () => showToast("Copied to clipboard"));
+    });
     return;
   }
 
@@ -319,28 +369,32 @@ function renderLanguagesPanel() {
   ensureI18nConfig();
   const locales = meta?.i18n?.locales || {};
   const enabled = config.i18n.enabledLocales;
+  const source = config.i18n.defaultLocale;
   const openAi = meta?.i18n?.openAi;
+  const locMeta = meta?.translation?.meta?.locales || config.translationMeta?.locales || {};
+  const job = meta?.translation?.job;
 
   const settings = document.createElement("div");
   settings.className = "field-card full";
-  settings.innerHTML = `<h3>Language settings</h3>
+  settings.innerHTML = `<h3>Source language & locales</h3>
+    <p class="hint">Administrators edit <strong>source content only</strong> (General section). Other languages are generated automatically on save.</p>
     <div class="field-grid">
-      <label>Default language
+      <label>Source language
         <select id="defaultLocaleSel"></select>
       </label>
     </div>
-    <div class="lang-enabled-wrap"><span class="hint">Enabled languages (public switcher + translations)</span>
+    <div class="lang-enabled-wrap"><span class="hint">Enabled languages (auto-translated after save)</span>
       <div class="lang-enabled" id="enabledLocales"></div>
     </div>
-    ${openAi ? "" : "<p class='hint warn'>Set <code>OPENAI_API_KEY</code> in .env to enable AI translation.</p>"}`;
+    ${openAi ? "" : "<p class='hint warn'>Set <code>OPENAI_API_KEY</code> in .env to enable automatic translation.</p>"}`;
   panel.appendChild(settings);
 
   const defaultSel = settings.querySelector("#defaultLocaleSel");
   Object.entries(locales).forEach(([code, m]) => {
     const opt = document.createElement("option");
     opt.value = code;
-    opt.textContent = `${m.native || m.label} (${code})`;
-    if (code === config.i18n.defaultLocale) opt.selected = true;
+    opt.textContent = `${m.native || m.label} (${code})${m.dir === "rtl" ? " · RTL" : ""}`;
+    if (code === source) opt.selected = true;
     defaultSel.appendChild(opt);
   });
   defaultSel.addEventListener("change", () => {
@@ -348,7 +402,6 @@ function renderLanguagesPanel() {
     if (!config.i18n.enabledLocales.includes(defaultSel.value)) {
       config.i18n.enabledLocales.unshift(defaultSel.value);
     }
-    langEditLocale = defaultSel.value;
     renderPanel();
   });
 
@@ -357,127 +410,106 @@ function renderLanguagesPanel() {
     const on = enabled.includes(code);
     const label = document.createElement("label");
     label.className = "lang-check";
-    label.innerHTML = `<input type="checkbox" data-locale="${code}" ${on ? "checked" : ""} /> ${m.native || m.label}`;
-    label.querySelector("input").addEventListener("change", (e) => {
-      const checked = e.target.checked;
-      if (checked && !config.i18n.enabledLocales.includes(code)) {
-        config.i18n.enabledLocales.push(code);
-        if (!config.translations[code]) config.translations[code] = {};
-      } else if (!checked) {
-        config.i18n.enabledLocales = config.i18n.enabledLocales.filter((c) => c !== code);
-        if (config.i18n.defaultLocale === code) config.i18n.defaultLocale = "en";
-      }
-      renderPanel();
-    });
+    label.innerHTML = `<input type="checkbox" data-locale="${code}" ${on ? "checked" : ""} ${code === source ? "disabled checked" : ""} /> ${m.native || m.label}${m.dir === "rtl" ? " (RTL)" : ""}`;
+    const input = label.querySelector("input");
+    if (!input.disabled) {
+      input.addEventListener("change", (e) => {
+        const checked = e.target.checked;
+        if (checked && !config.i18n.enabledLocales.includes(code)) {
+          config.i18n.enabledLocales.push(code);
+        } else if (!checked) {
+          config.i18n.enabledLocales = config.i18n.enabledLocales.filter((c) => c !== code);
+        }
+        renderPanel();
+      });
+    }
     enabledWrap.appendChild(label);
   });
 
-  const toolbar = document.createElement("div");
-  toolbar.className = "field-card full lang-toolbar";
-  toolbar.innerHTML = `
-    <h3>Edit translations</h3>
-    <div class="lang-toolbar-row">
-      <label>Locale <select id="editLocaleSel"></select></label>
-      <label>Scope <select id="editScopeSel">
-        <option value="site">Public site</option>
-        <option value="admin">Admin panel</option>
-        <option value="all">All strings</option>
-      </select></label>
-      <button type="button" class="btn ghost" id="aiTranslateBtn" ${openAi ? "" : "disabled"}>AI translate missing</button>
-      <button type="button" class="btn ghost" id="aiTranslateAllBtn" ${openAi ? "" : "disabled"}>AI translate all enabled</button>
-    </div>`;
-  panel.appendChild(toolbar);
-
-  const editSel = toolbar.querySelector("#editLocaleSel");
-  enabled.forEach((code) => {
-    const opt = document.createElement("option");
-    opt.value = code;
-    opt.textContent = locales[code]?.native || code;
-    if (code === langEditLocale) opt.selected = true;
-    editSel.appendChild(opt);
-  });
-  editSel.addEventListener("change", () => {
-    langEditLocale = editSel.value;
-    renderPanel();
-  });
-  const scopeSel = toolbar.querySelector("#editScopeSel");
-  scopeSel.value = langEditScope;
-  scopeSel.addEventListener("change", () => {
-    langEditScope = scopeSel.value;
-    renderPanel();
-  });
-
-  toolbar.querySelector("#aiTranslateBtn").addEventListener("click", async () => {
-    try {
-      const res = await api("/admin/api/i18n/translate", {
-        method: "POST",
-        body: JSON.stringify({ locale: langEditLocale, scope: langEditScope }),
-      });
-      if (!config.translations[langEditLocale]) config.translations[langEditLocale] = {};
-      Object.assign(config.translations[langEditLocale], res.patch);
-      showToast(`AI translated ${res.translated} strings — click Apply to publish`);
-      renderPanel();
-    } catch (err) {
-      showToast(err.message || "AI translation failed");
-    }
-  });
-
-  toolbar.querySelector("#aiTranslateAllBtn").addEventListener("click", async () => {
-    const targets = config.i18n.enabledLocales.filter((c) => c !== config.i18n.defaultLocale);
-    if (!targets.length) {
-      showToast("No extra locales enabled");
-      return;
-    }
-    try {
-      let total = 0;
-      for (const loc of targets) {
-        const res = await api("/admin/api/i18n/translate", {
-          method: "POST",
-          body: JSON.stringify({ locale: loc, scope: "all" }),
-        });
-        if (!config.translations[loc]) config.translations[loc] = {};
-        Object.assign(config.translations[loc], res.patch);
-        total += res.translated || 0;
-      }
-      showToast(`AI translated ${total} strings across ${targets.length} languages — Apply to publish`);
-      renderPanel();
-    } catch (err) {
-      showToast(err.message || "AI translation failed");
-    }
-  });
-
-  const refLocale = config.i18n.defaultLocale;
-  const refBundle = config.translations[refLocale] || {};
-  const targetBundle = config.translations[langEditLocale] || {};
-  const items = catalogItemsForScope(langEditScope);
-  const groups = new Map();
-  items.forEach((item) => {
-    if (!groups.has(item.group)) groups.set(item.group, []);
-    groups.get(item.group).push(item);
-  });
-
-  for (const [groupName, groupItems] of groups) {
-    const card = document.createElement("div");
-    card.className = "field-card full";
-    card.innerHTML = `<h3>${groupName}</h3><div class="i18n-table-wrap"><table class="i18n-table"><thead><tr><th>Key</th><th>Reference (${refLocale})</th><th>Translation (${langEditLocale})</th></tr></thead><tbody></tbody></table></div>`;
-    const tbody = card.querySelector("tbody");
-    groupItems.forEach((item) => {
-      const tr = document.createElement("tr");
-      const ref = refBundle[item.key] || item.default;
-      const val = targetBundle[item.key] || "";
-      tr.innerHTML = `<td class="i18n-key"><code>${item.key}</code><span>${item.label}</span></td>
-        <td class="i18n-ref">${escHtml(ref)}</td>
-        <td><textarea rows="${String(ref).length > 60 ? 2 : 1}" data-i18n-key="${item.key}">${escHtml(val)}</textarea></td>`;
-      tbody.appendChild(tr);
-    });
-    tbody.querySelectorAll("textarea").forEach((ta) => {
-      ta.addEventListener("input", () => {
-        if (!config.translations[langEditLocale]) config.translations[langEditLocale] = {};
-        config.translations[langEditLocale][ta.dataset.i18nKey] = ta.value;
-      });
-    });
-    panel.appendChild(card);
+  if (job?.running) {
+    const banner = document.createElement("div");
+    banner.className = "job-banner full";
+    banner.textContent = `Generating translations… (${job.completed?.length || 0} done, ${job.pending?.length || 0} pending)`;
+    panel.appendChild(banner);
   }
+
+  const statusCard = document.createElement("div");
+  statusCard.className = "field-card full";
+  statusCard.innerHTML = `<h3>Translation status</h3><div class="translation-status" id="translationStatus"></div>`;
+  panel.appendChild(statusCard);
+  const statusWrap = statusCard.querySelector("#translationStatus");
+  enabled.forEach((code) => {
+    const lm = locales[code] || {};
+    const st = locMeta[code]?.status || (code === source ? "source" : "pending");
+    const row = document.createElement("div");
+    row.className = "translation-row";
+    row.innerHTML = `
+      <span><strong>${escHtml(lm.native || code)}</strong> <span class="gen-link-status status-${escHtml(st)}">${escHtml(statusLabel(st))}</span>${lm.dir === "rtl" ? '<span class="tag-rtl">RTL</span>' : ""}</span>
+      <span class="hint">${code === source ? "Canonical source" : locMeta[code]?.updatedAt ? escHtml(locMeta[code].updatedAt.slice(0, 19).replace("T", " ")) : ""}</span>
+      ${code !== source && st === "failed" ? `<button type="button" class="btn ghost sm" data-retry="${code}">Retry</button>` : "<span></span>"}`;
+    statusWrap.appendChild(row);
+    const retry = row.querySelector("[data-retry]");
+    if (retry) {
+      retry.addEventListener("click", async () => {
+        try {
+          await api("/admin/api/translation/retry", { method: "POST", body: JSON.stringify({ locale: code }) });
+          showToast(`Retrying ${code}…`);
+          startTranslationPoll();
+        } catch (err) {
+          showToast(err.message || "Retry failed");
+        }
+      });
+    }
+  });
+
+  const glossaryCard = document.createElement("div");
+  glossaryCard.className = "field-card full";
+  glossaryCard.innerHTML = `<h3>Terminology glossary</h3>
+    <p class="hint">AI uses these rules for consistent sportsbook terminology across pages.</p>
+    <table class="glossary-table"><thead><tr><th>Term</th><th>Rule</th><th>Hint</th></tr></thead><tbody id="glossaryBody"></tbody></table>`;
+  panel.appendChild(glossaryCard);
+  const glossary = config.i18n.glossary || meta?.i18n?.glossary || [];
+  const tbody = glossaryCard.querySelector("#glossaryBody");
+  glossary.forEach((row, idx) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input type="text" data-gloss-idx="${idx}" data-gloss-field="term" value="${escHtml(row.term || "")}" /></td>
+      <td><select data-gloss-idx="${idx}" data-gloss-field="rule">
+        <option value="keep" ${row.rule === "keep" ? "selected" : ""}>Keep as-is</option>
+        <option value="preferred" ${row.rule === "preferred" ? "selected" : ""}>Preferred translation</option>
+        <option value="translate" ${row.rule === "translate" ? "selected" : ""}>Translate naturally</option>
+      </select></td>
+      <td><input type="text" data-gloss-idx="${idx}" data-gloss-field="hint" value="${escHtml(row.hint || row.translation || "")}" placeholder="Optional hint" /></td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("[data-gloss-idx]").forEach((el) => {
+    el.addEventListener("input", () => {
+      const idx = Number(el.dataset.glossIdx);
+      const field = el.dataset.glossField;
+      if (!config.i18n.glossary[idx]) return;
+      config.i18n.glossary[idx][field] = el.value;
+    });
+    el.addEventListener("change", () => {
+      const idx = Number(el.dataset.glossIdx);
+      const field = el.dataset.glossField;
+      if (!config.i18n.glossary[idx]) return;
+      config.i18n.glossary[idx][field] = el.value;
+    });
+  });
+
+  const sourceCard = document.createElement("div");
+  sourceCard.className = "field-card full";
+  sourceCard.innerHTML = `<h3>Source content</h3>
+    <p class="hint">Edit branding strings in the <strong>General</strong> section (source language). Do not translate manually here — save triggers auto-translation.</p>
+    <button type="button" class="btn ghost" id="gotoGeneral">Open General</button>`;
+  panel.appendChild(sourceCard);
+  sourceCard.querySelector("#gotoGeneral").addEventListener("click", () => {
+    section = "general";
+    document.querySelectorAll(".erp-nav-item").forEach((n) => {
+      n.classList.toggle("is-active", n.dataset.section === "general");
+    });
+    renderPanel();
+  });
 }
 
 function escHtml(s) {
@@ -501,10 +533,10 @@ function refreshPreview() {
 async function loadApp() {
   config = await api("/admin/api/config");
   meta = await api("/admin/api/meta");
-  sharedUrlInput.value = meta.sharedUrl;
-  originalUrlEl.textContent = `Original: ${meta.originalUrl}`;
   renderPanel();
+  renderPreviewLinks();
   refreshPreview();
+  startTranslationPoll();
 }
 
 const loginBtn = document.getElementById("loginBtn");
@@ -524,6 +556,9 @@ function showApp() {
   authState = "authed";
   loginView.classList.add("is-hidden");
   appView.classList.remove("is-hidden");
+  if (localStorage.getItem("aurum_sidebar_collapsed") === "1") {
+    appView.classList.add("is-collapsed");
+  }
 }
 
 if (togglePwd && passwordInput) {
@@ -575,9 +610,15 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
 
 document.getElementById("applyBtn").addEventListener("click", async () => {
   try {
-    config = await api("/admin/api/config", { method: "PUT", body: JSON.stringify(config) });
-    showToast("Changes applied — live site updated");
+    const res = await api("/admin/api/config", { method: "PUT", body: JSON.stringify(config) });
+    config = res;
+    if (res.translationJob) meta.translation = { job: res.translationJob };
+    showToast("Saved — translations running in background");
+    meta = await api("/admin/api/meta");
+    renderPreviewLinks();
     refreshPreview();
+    startTranslationPoll();
+    if (section === "languages" || section === "share") renderPanel();
   } catch (err) {
     showToast(err.message);
   }
@@ -590,15 +631,35 @@ document.getElementById("resetBtn").addEventListener("click", async () => {
   showToast("Section reset to saved values");
 });
 
-document.getElementById("copyUrl").addEventListener("click", () => copyText(sharedUrlInput.value));
-
 document.getElementById("nav").addEventListener("click", (e) => {
-  const btn = e.target.closest(".nav-item");
+  const btn = e.target.closest(".erp-nav-item");
   if (!btn) return;
   section = btn.dataset.section;
-  document.querySelectorAll(".nav-item").forEach((n) => n.classList.toggle("is-active", n === btn));
+  document.querySelectorAll(".erp-nav-item").forEach((n) => n.classList.toggle("is-active", n === btn));
   renderPanel();
+  closeMobileDrawer();
 });
+
+const sidebarCollapse = document.getElementById("sidebarCollapse");
+if (sidebarCollapse) {
+  sidebarCollapse.addEventListener("click", () => {
+    appView.classList.toggle("is-collapsed");
+    localStorage.setItem("aurum_sidebar_collapsed", appView.classList.contains("is-collapsed") ? "1" : "0");
+  });
+}
+
+function openMobileDrawer() {
+  appView.classList.add("is-drawer-open");
+  if (drawerBackdrop) drawerBackdrop.hidden = false;
+}
+function closeMobileDrawer() {
+  appView.classList.remove("is-drawer-open");
+  if (drawerBackdrop) drawerBackdrop.hidden = true;
+}
+
+document.getElementById("mobileNavOpen")?.addEventListener("click", openMobileDrawer);
+document.getElementById("mobileNavClose")?.addEventListener("click", closeMobileDrawer);
+drawerBackdrop?.addEventListener("click", closeMobileDrawer);
 
 async function bootstrap() {
   try {

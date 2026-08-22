@@ -35,6 +35,7 @@
     state.locales = data.locales || {};
     state.strings = data.strings || {};
     document.documentElement.lang = state.locale;
+    document.documentElement.dir = data.dir === "rtl" ? "rtl" : "ltr";
     return state;
   }
 

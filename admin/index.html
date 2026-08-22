@@ -59,63 +59,93 @@
     </div>
   </div>
 
-  <div id="appView" class="app is-hidden">
-    <aside class="sidebar">
-      <div class="sidebar-head">
-        <span class="logo ig-logo-sm"></span>
-        <div>
+  <div id="appView" class="erp-app is-hidden">
+    <div class="erp-drawer-backdrop" id="drawerBackdrop" hidden></div>
+
+    <aside class="erp-sidebar" id="sidebar" aria-label="Admin navigation">
+      <div class="erp-sidebar-brand">
+        <span class="logo ig-logo-sm" aria-hidden="true"></span>
+        <div class="erp-brand-text">
           <strong>AURUM Studio</strong>
-          <span>Operator control</span>
+          <span>Operator ERP</span>
         </div>
+        <button type="button" class="erp-collapse-btn" id="sidebarCollapse" aria-label="Collapse sidebar" title="Collapse sidebar">⟨</button>
       </div>
-      <nav id="nav">
-        <button type="button" class="nav-item is-active" data-section="themes">Themes</button>
-        <button type="button" class="nav-item" data-section="general">General</button>
-        <button type="button" class="nav-item" data-section="layout">Layout</button>
-        <button type="button" class="nav-item" data-section="colors">Colors</button>
-        <button type="button" class="nav-item" data-section="typography">Typography</button>
-        <button type="button" class="nav-item" data-section="structure">Structure</button>
-        <button type="button" class="nav-item" data-section="board">Event desk</button>
-        <button type="button" class="nav-item" data-section="languages">Languages</button>
-        <button type="button" class="nav-item" data-section="share">Share & publish</button>
+
+      <nav class="erp-sidebar-nav" id="nav">
+        <div class="erp-nav-group">
+          <div class="erp-nav-label">Studio</div>
+          <button type="button" class="erp-nav-item is-active" data-section="themes" title="Themes">
+            <span class="erp-nav-icon" aria-hidden="true">◆</span><span class="erp-nav-text">Themes</span>
+          </button>
+          <button type="button" class="erp-nav-item" data-section="general" title="General">
+            <span class="erp-nav-icon" aria-hidden="true">◇</span><span class="erp-nav-text">General</span>
+          </button>
+        </div>
+        <div class="erp-nav-group">
+          <div class="erp-nav-label">Design</div>
+          <button type="button" class="erp-nav-item" data-section="layout" title="Layout">
+            <span class="erp-nav-icon" aria-hidden="true">▣</span><span class="erp-nav-text">Layout</span>
+          </button>
+          <button type="button" class="erp-nav-item" data-section="colors" title="Colors">
+            <span class="erp-nav-icon" aria-hidden="true">◐</span><span class="erp-nav-text">Colors</span>
+          </button>
+          <button type="button" class="erp-nav-item" data-section="typography" title="Typography">
+            <span class="erp-nav-icon" aria-hidden="true">A</span><span class="erp-nav-text">Typography</span>
+          </button>
+          <button type="button" class="erp-nav-item" data-section="structure" title="Structure">
+            <span class="erp-nav-icon" aria-hidden="true">▦</span><span class="erp-nav-text">Structure</span>
+          </button>
+          <button type="button" class="erp-nav-item" data-section="board" title="Event desk">
+            <span class="erp-nav-icon" aria-hidden="true">▤</span><span class="erp-nav-text">Event desk</span>
+          </button>
+        </div>
+        <div class="erp-nav-group">
+          <div class="erp-nav-label">Content</div>
+          <button type="button" class="erp-nav-item" data-section="languages" title="Languages">
+            <span class="erp-nav-icon" aria-hidden="true">☰</span><span class="erp-nav-text">Languages</span>
+          </button>
+          <button type="button" class="erp-nav-item" data-section="share" title="Publish">
+            <span class="erp-nav-icon" aria-hidden="true">↗</span><span class="erp-nav-text">Publish</span>
+          </button>
+        </div>
       </nav>
-      <div class="sidebar-foot">
+
+      <div class="erp-sidebar-foot">
+        <button type="button" id="mobileNavClose" class="btn ghost light erp-mobile-only">Close menu</button>
         <button type="button" id="logoutBtn" class="btn ghost light">Sign out</button>
       </div>
     </aside>
 
-    <main class="workspace">
-      <header class="top">
-        <div>
-          <h2 id="sectionTitle">General</h2>
-          <p id="sectionDesc">Branding, titles, and page identity</p>
+    <div class="erp-main">
+      <header class="erp-toolbar">
+        <div class="erp-toolbar-left">
+          <button type="button" id="mobileNavOpen" class="btn ghost erp-mobile-only" aria-label="Open menu">☰</button>
+          <div>
+            <h2 id="sectionTitle">Themes</h2>
+            <p id="sectionDesc">Design systems and presets</p>
+          </div>
         </div>
-        <div class="top-actions">
+        <div class="erp-toolbar-actions">
           <button type="button" id="resetBtn" class="btn ghost">Reset section</button>
-          <button type="button" id="applyBtn" class="btn primary gold">Apply changes</button>
+          <button type="button" id="applyBtn" class="btn primary gold">Save & publish</button>
         </div>
       </header>
 
-      <div class="content-grid">
-        <section class="panel" id="panel"></section>
-        <aside class="preview">
-          <div class="preview-head">
-            <strong>Live preview</strong>
-            <span id="previewNote">Updates after Apply</span>
-          </div>
-          <iframe id="previewFrame" title="Site preview"></iframe>
-          <div class="preview-url">
-            <label>Shared URL</label>
-            <div class="url-row">
-              <input id="sharedUrl" readonly />
-              <button type="button" id="copyUrl" class="btn ghost">Copy</button>
+      <div class="erp-workspace" id="workspace">
+        <div class="erp-workspace-grid">
+          <section class="erp-panel" id="panel" aria-live="polite"></section>
+          <aside class="erp-preview">
+            <div class="erp-preview-head">
+              <strong>Live preview</strong>
+              <span id="previewNote">Updates after save</span>
             </div>
-            <p class="hint">Same path as the original site — only your base URL differs.</p>
-            <p class="hint muted" id="originalUrl"></p>
-          </div>
-        </aside>
+            <iframe id="previewFrame" title="Site preview"></iframe>
+            <div class="erp-preview-foot" id="previewLinks"></div>
+          </aside>
+        </div>
       </div>
-    </main>
+    </div>
   </div>
 
   <div id="toast" class="toast" hidden></div>
