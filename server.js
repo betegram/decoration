@@ -28,6 +28,7 @@ import {
   keysForAiTranslate,
 } from "./lib/i18n.js";
 import { translateWithOpenAI, isOpenAiConfigured } from "./lib/openai.js";
+import { proxyLog, PROXY_DEBUG } from "./lib/proxy-debug.js";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8080;
@@ -202,6 +203,8 @@ async function serveMarketsShell(res, method) {
 async function proxyApi(req, res, base, origin) {
   const raw = req.url.slice(base.length) || "/";
   const suffix = raw.startsWith("/") ? raw : `/${raw}`;
+  const target = origin + suffix;
+  proxyLog("api→upstream", { method: req.method, base, suffix, target });
   const headers = {
     Accept: "application/json",
     Origin: UPSTREAM,
@@ -211,15 +214,64 @@ async function proxyApi(req, res, base, origin) {
   if (req.headers["utc-offset"]) headers["utc-offset"] = req.headers["utc-offset"];
   if (origin === UPSTREAM) delete headers.Accept;
   try {
-    const { status, headers: rh, body } = await fetchUpstream(origin + suffix, { headers });
+    const { status, headers: rh, body } = await fetchUpstream(target, { headers });
     const ctype = rh["content-type"] || rh["Content-Type"] || "application/json";
+    proxyLog("api←upstream", { status, type: ctype, bytes: body.length });
     send(res, status, body, ctype, req.method);
   } catch (err) {
+    proxyLog("api-error", { message: err.message });
+    send(res, 502, String(err.message), "text/plain", req.method);
+  }
+}
+
+async function proxyUpstreamApi(req, res) {
+  const suffix = req.url.replace(/^\/api\/upstream/, "") || "/";
+  const target = UPSTREAM + suffix;
+  proxyLog("upstream-api→", { method: req.method, target });
+  const headers = {};
+  for (const [k, v] of Object.entries(req.headers)) {
+    if (!HOP_BY_HOP.has(k.toLowerCase()) && v) headers[k] = v;
+  }
+  headers["Origin"] = UPSTREAM;
+  headers["Referer"] = `${UPSTREAM}/`;
+  headers["User-Agent"] = USER_AGENT;
+  let payload = null;
+  if (req.method !== "GET" && req.method !== "HEAD") payload = await readBody(req);
+  try {
+    const { status, headers: rh, body } = await fetchUpstream(target, {
+      method: req.method,
+      headers,
+      body: payload,
+    });
+    const ctype = rh["content-type"] || rh["Content-Type"] || "application/json";
+    const outHeaders = {};
+    for (const [key, value] of Object.entries(rh)) {
+      const lk = key.toLowerCase();
+      if (HOP_BY_HOP.has(lk) || STRIP_HEADERS.has(lk)) continue;
+      if (lk === "set-cookie" || lk === "content-type") continue;
+      outHeaders[key] = value;
+    }
+    const cookies = rh["set-cookie"];
+    if (cookies) {
+      const list = Array.isArray(cookies) ? cookies : [cookies];
+      outHeaders["Set-Cookie"] = list.map(rewriteCookie);
+    }
+    if (ctype) outHeaders["Content-Type"] = ctype;
+    outHeaders["Content-Length"] = body.length;
+    outHeaders["Access-Control-Allow-Origin"] = "*";
+    proxyLog("upstream-api←", { status, type: ctype, bytes: body.length });
+    res.writeHead(status, outHeaders);
+    if (req.method !== "HEAD") res.end(body);
+    else res.end();
+  } catch (err) {
+    proxyLog("upstream-api-error", { message: err.message });
     send(res, 502, String(err.message), "text/plain", req.method);
   }
 }
 
 async function proxyBoard(req, res) {
+  const target = UPSTREAM + req.url;
+  proxyLog("board→upstream", { method: req.method, url: req.url, target });
   const headers = {};
   for (const [k, v] of Object.entries(req.headers)) {
     if (!HOP_BY_HOP.has(k.toLowerCase()) && v) headers[k] = v;
@@ -229,7 +281,7 @@ async function proxyBoard(req, res) {
   let payload = null;
   if (req.method !== "GET" && req.method !== "HEAD") payload = await readBody(req);
   try {
-    const { status, headers: rh, body } = await fetchUpstream(UPSTREAM + req.url, {
+    const { status, headers: rh, body } = await fetchUpstream(target, {
       method: req.method,
       headers,
       body: payload,
@@ -251,10 +303,12 @@ async function proxyBoard(req, res) {
     if (ctype) outHeaders["Content-Type"] = ctype;
     outHeaders["Content-Length"] = outBody.length;
     outHeaders["Access-Control-Allow-Origin"] = "*";
+    proxyLog("board←upstream", { status, type: ctype, bytes: outBody.length, injected: outBody.length !== body.length });
     res.writeHead(status, outHeaders);
     if (req.method !== "HEAD") res.end(outBody);
     else res.end();
   } catch (err) {
+    proxyLog("board-error", { message: err.message });
     send(res, 502, `Upstream error: ${err.message}`, "text/plain", req.method);
   }
 }
@@ -470,6 +524,10 @@ const server = createServer(async (req, res) => {
     await proxyApi(req, res, "/api/flag", UPSTREAM);
     return;
   }
+  if (pathname.startsWith("/api/upstream")) {
+    await proxyUpstreamApi(req, res);
+    return;
+  }
 
   if (method === "GET" || method === "HEAD") {
     if (STATIC[pathname]) {
@@ -505,6 +563,7 @@ async function start() {
     await refreshConfig();
     console.log(`AURUM Markets  → http://localhost:${PORT}${sharedPath(1)}`);
     console.log(`Overview shell → ${OVERVIEW_SHELL} (${OVERVIEW_SHELL === "proxy" ? "original sportsbook SPA" : "custom markets UI"})`);
+    if (PROXY_DEBUG) console.log("Proxy debug logging enabled (PROXY_DEBUG=true)");
     console.log(`Admin panel    → http://localhost:${PORT}/admin`);
     console.log(`Original path  → ${UPSTREAM}${sharedPath(1)}`);
   });

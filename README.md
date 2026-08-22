@@ -36,6 +36,19 @@ When `MONGODB_URI` is set, site config and admin credentials are stored in Mongo
 | `OVERVIEW_SHELL` | `proxy` (original SPA at `/live-sports/overview/*`) or `custom` (AURUM UI) |
 | `OPENAI_API_KEY` | Enables AI translation in Admin → Languages |
 | `OPENAI_MODEL` | OpenAI model (default `gpt-4o-mini`) |
+| `PROXY_DEBUG` | `true` — structured proxy request/response logs (secrets redacted) |
+
+### Proxy parity (Phase A)
+
+See `.cursor/skills/proxy-parity-engineering/SKILL.md` and `docs/PROXY_PARITY_AUDIT.md`.
+
+```bash
+node scripts/proxy-diff.mjs          # smoke compare original vs proxy
+PROXY_DEBUG=true ./run.sh            # debug logging
+```
+
+- **Phase A**: `/live-sports/*` proxies upstream SPA (`OVERVIEW_SHELL=proxy`).
+- **Phase B**: Custom UI at `/markets/*` only after parity tests pass.
 
 ### Multilingual
 

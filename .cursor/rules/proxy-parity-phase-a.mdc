@@ -1,0 +1,17 @@
+---
+description: Enforce Phase A proxy parity before UI transformation; use differential debugging for server.js and proxy work
+globs: server.js,lib/**/*.js,nginx/**/*.conf,scripts/proxy-diff.mjs
+alwaysApply: false
+---
+
+# Proxy parity — Phase A before Phase B
+
+When editing the proxy, `server.js`, or nginx for this project:
+
+1. Read `.cursor/skills/proxy-parity-engineering/SKILL.md` and follow it.
+2. Do **not** patch blindly. Run `node scripts/proxy-diff.mjs` and update `docs/PROXY_PARITY_AUDIT.md` with the first divergence.
+3. **Phase A** = functional parity with original upstream SPA at `/live-sports/*`. No Polymarket UI changes on that path.
+4. **Phase B** = custom UI at `/markets/*` and i18n — separate from proxy parity.
+5. Classify failures (COOKIE, WEBSOCKET, ASSET, etc.) before fixing.
+6. Never bypass auth, CORS, or CSP; document upstream limitations instead.
+7. Set `PROXY_DEBUG=true` when investigating; redact secrets in logs.
