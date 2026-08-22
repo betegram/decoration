@@ -25,7 +25,8 @@ docker compose up --build
 - **Admin panel:** `http://localhost:${PORT}/admin`  
   Default login: `admin` / `aurum2026` (set via `.env`)
 
-See **[How it works](HOW_IT_WORKS.md)** for architecture and data flow.
+See **[How it works](HOW_IT_WORKS.md)** for architecture and data flow.  
+AI agents: see **[AGENTS.md](AGENTS.md)** and `.cursor/rules/`.
 
 ### Production deploy (ui.kycland.xyz)
 

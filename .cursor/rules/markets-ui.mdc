@@ -1,0 +1,29 @@
+---
+description: Markets UI layout, ticket rail, themes, and responsive rules
+globs: index.html,markets.js,styles.css,lib/config.js,lib/themes.js,lib/theme-tokens.js,admin/**/*
+alwaysApply: false
+---
+
+# Markets UI
+
+Read `AGENTS.md` for full context. Critical layout rules:
+
+## Ticket widget
+
+- Ticket `<aside>` must stay **outside** `.page-shell` (sibling of feed container).
+- Desktop (`min-width: 1101px`): fixed rail via `--ticket-rail-right` from `syncChromeMetrics()`; not sticky inside feed grid.
+- Reserve feed space: `.page-shell` `padding-right` = ticket width + `--shell-gap` + gutter.
+- Mobile (`max-width: 1100px`): bottom sheet + FAB; `setTicketOpen()` mobile-only.
+
+## CSS cascade
+
+`styles.css` then `/api/theme.css`. Theme rules can use `!important` — desktop/mobile breakpoints must be explicit.
+
+## Live data (`markets.js`)
+
+- Today: WebSocket overview (`join-liveSportOverview`), not REST daterange for card odds.
+- Use per-sport market slugs (`totals`, `handicap`, `totals_new`, etc.), not soccer-only defaults.
+
+## Responsive checks
+
+Verify ~1400px desktop and ~390px mobile after layout changes; test with a heavy-shadow theme.

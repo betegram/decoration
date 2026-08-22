@@ -1,0 +1,18 @@
+---
+description: Core AI agent workflow — scope, git, deploy for AURUM Markets
+alwaysApply: true
+---
+
+# AI workflow (always)
+
+- Read relevant code before editing; run commands to verify — do not guess.
+- **Minimize diff scope** — fix root cause only; no unrelated refactors.
+- Match existing patterns in the file you touch.
+- **After completed fixes: commit and push to `main`** unless the user opts out for that task.
+- Never commit `.env`, credentials, or API keys.
+- Post-push deploy note: `git pull && docker compose up --build -d` on the server.
+- Do not force-push `main`, skip hooks, or amend commits unless hooks auto-fixed files after a successful commit.
+
+**Routes:** Designed UI = `/live-sports/overview/*`. Proxied upstream SPA = `/markets/overview/*`. Do not swap without explicit request.
+
+**Phases:** Proxy parity (Phase A) before UI redesign (Phase B). Do not mix proxy fixes with Polymarket UI changes in one commit.
