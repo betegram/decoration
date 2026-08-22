@@ -21,7 +21,8 @@ Living document. Update after each differential run.
 
 | Step | Resource | A (original) | B (proxy) | Divergence |
 |------|----------|--------------|-----------|------------|
-| 1 | `/live-sports/overview/1` | 200 HTML SPA shell | 200 **custom AURUM `index.html`** (if not deployed) OR 200 SPA (after deploy) | **DOCUMENT** — wrong shell if custom UI served |
+| 1 | `/live-sports/overview/1` | 200 HTML SPA shell | 200 **custom AURUM `index.html`** | **DOCUMENT** — designed UI (intentional) |
+| 1b | `/markets/overview/1` | 200 HTML SPA shell | 200 SPA via path rewrite | Proxy parity target |
 | 2 | `/assets/index-c14111cb.js` | 200 JS ~5MB | 200 JS ~5MB | OK |
 | 3 | `/assets/index-d90b4e09.css` | 200 CSS | 200 CSS | OK |
 | 4 | BS `sports/today` | 200 JSON (via `bs-iframedev1`) | 200 JSON via `/api/bs/sports/today` | OK on proxy path |
@@ -30,7 +31,7 @@ Living document. Update after each differential run.
 
 ## First divergences to fix (priority)
 
-1. **DOCUMENT / ROUTE** — `/live-sports/overview/*` must proxy upstream SPA (`OVERVIEW_SHELL=proxy`). Custom `markets.js` shell is Phase B at `/markets/*`.
+1. **DOCUMENT / ROUTE** — `/markets/overview/*` proxies upstream SPA (`/markets/*` → upstream `/live-sports/*`). Designed AURUM UI at `/live-sports/overview/*`.
 2. **ASSET** — Static allowlist (`board.css`, `i18n-client.js`, …) must register before catch-all proxy.
 3. **WEBSOCKET** — Optional same-origin WS proxy at `/socket/` (implemented in server upgrade handler) for environments that block cross-origin WS.
 

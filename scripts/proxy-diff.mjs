@@ -7,7 +7,7 @@ const PROXY = process.env.PROXY_BASE || "https://ui.kycland.xyz";
 const BS = process.env.BS_UPSTREAM || "https://bs-iframedev1.thesportslab.eu";
 
 const checks = [
-  { label: "overview HTML", a: `${ORIG}/live-sports/overview/1`, b: `${PROXY}/live-sports/overview/1` },
+  { label: "overview HTML", a: `${ORIG}/live-sports/overview/1`, b: `${PROXY}/markets/overview/1` },
   { label: "main JS bundle", a: `${ORIG}/assets/index-c14111cb.js`, b: `${PROXY}/assets/index-c14111cb.js` },
   { label: "main CSS", a: `${ORIG}/assets/index-d90b4e09.css`, b: `${PROXY}/assets/index-d90b4e09.css` },
   { label: "board.css", a: null, b: `${PROXY}/board.css` },

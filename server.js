@@ -35,7 +35,8 @@ const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.HOST || "0.0.0.0";
 const UPSTREAM = process.env.UPSTREAM || "https://iframedev1.thesportslab.eu";
 const BS = process.env.BS_UPSTREAM || "https://bs-iframedev1.thesportslab.eu";
-const OVERVIEW_SHELL = (process.env.OVERVIEW_SHELL || "proxy").toLowerCase();
+const LIVE_OVERVIEW_RE = /^\/live-sports\/overview\/\d+\/?$/;
+const PROXY_OVERVIEW_PATH = "/markets/overview/1";
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 " +
   "(KHTML, like Gecko) Version/17.0 Safari/605.1.15";
@@ -113,6 +114,36 @@ function sessionUser(req) {
 
 async function readAuth() {
   return loadAdminAuth();
+}
+
+function mapMarketsPath(url) {
+  const q = url.indexOf("?");
+  const path = q >= 0 ? url.slice(0, q) : url;
+  const search = q >= 0 ? url.slice(q) : "";
+  if (!path.startsWith("/markets")) {
+    return { upstreamUrl: url, rewriteLocation: false };
+  }
+  const upstreamPath = `/live-sports${path.slice("/markets".length)}`;
+  return { upstreamUrl: upstreamPath + search, rewriteLocation: true };
+}
+
+function rewriteLocationForMarkets(value) {
+  if (!value) return value;
+  if (value.startsWith("/live-sports")) {
+    return `/markets${value.slice("/live-sports".length)}`;
+  }
+  try {
+    const base = UPSTREAM.endsWith("/") ? UPSTREAM : `${UPSTREAM}/`;
+    const upstreamOrigin = new URL(UPSTREAM).origin;
+    const u = new URL(value, base);
+    if (u.origin === upstreamOrigin && u.pathname.startsWith("/live-sports")) {
+      u.pathname = `/markets${u.pathname.slice("/live-sports".length)}`;
+      return u.pathname + u.search + u.hash;
+    }
+  } catch {
+    // ignore malformed Location
+  }
+  return value;
 }
 
 function rewriteCookie(value) {
@@ -270,8 +301,15 @@ async function proxyUpstreamApi(req, res) {
 }
 
 async function proxyBoard(req, res) {
-  const target = UPSTREAM + req.url;
-  proxyLog("board→upstream", { method: req.method, url: req.url, target });
+  const mapped = mapMarketsPath(req.url);
+  const target = UPSTREAM + mapped.upstreamUrl;
+  proxyLog("board→upstream", {
+    method: req.method,
+    url: req.url,
+    upstreamUrl: mapped.upstreamUrl,
+    target,
+    rewriteLocation: mapped.rewriteLocation,
+  });
   const headers = {};
   for (const [k, v] of Object.entries(req.headers)) {
     if (!HOP_BY_HOP.has(k.toLowerCase()) && v) headers[k] = v;
@@ -293,6 +331,10 @@ async function proxyBoard(req, res) {
       const lk = key.toLowerCase();
       if (HOP_BY_HOP.has(lk) || STRIP_HEADERS.has(lk)) continue;
       if (lk === "set-cookie" || lk === "content-type") continue;
+      if (lk === "location" && mapped.rewriteLocation) {
+        outHeaders[key] = rewriteLocationForMarkets(value);
+        continue;
+      }
       outHeaders[key] = value;
     }
     const cookies = rh["set-cookie"];
@@ -377,7 +419,7 @@ async function handleAdminApi(req, res, pathname, method) {
         themes: THEME_PRESETS,
         fonts: Object.keys(FONT_STACKS),
         sharedUrl: `${proto}://${host}${sharedPath(1)}`,
-        marketsPreviewUrl: `${proto}://${host}/markets/overview/1`,
+        proxyReferenceUrl: `${proto}://${host}${PROXY_OVERVIEW_PATH}`,
         originalUrl: `${UPSTREAM}${sharedPath(1)}`,
         upstream: UPSTREAM,
         i18n: {
@@ -469,7 +511,8 @@ const server = createServer(async (req, res) => {
         flagBase: "/api/flag",
         wsUrl: BS,
         wsPath: "/socket/",
-        overviewShell: OVERVIEW_SHELL,
+        designedPath: sharedPath(1),
+        proxyPath: PROXY_OVERVIEW_PATH,
         upstream: UPSTREAM,
         bsUpstream: BS,
       }),
@@ -538,12 +581,12 @@ const server = createServer(async (req, res) => {
       redirect(res, sharedPath(1));
       return;
     }
-    if (OVERVIEW_SHELL === "custom" && /^\/live-sports\/overview\/\d+\/?$/.test(pathname)) {
+    if (LIVE_OVERVIEW_RE.test(pathname)) {
       await serveMarketsShell(res, method);
       return;
     }
-    if (pathname === "/markets" || /^\/markets\/overview\/\d+\/?$/.test(pathname)) {
-      await serveMarketsShell(res, method);
+    if (pathname === "/markets" || pathname === "/markets/") {
+      redirect(res, PROXY_OVERVIEW_PATH);
       return;
     }
   }
@@ -561,8 +604,8 @@ async function start() {
   await initStore(ROOT);
   server.listen(PORT, HOST, async () => {
     await refreshConfig();
-    console.log(`AURUM Markets  → http://localhost:${PORT}${sharedPath(1)}`);
-    console.log(`Overview shell → ${OVERVIEW_SHELL} (${OVERVIEW_SHELL === "proxy" ? "original sportsbook SPA" : "custom markets UI"})`);
+    console.log(`Designed UI    → http://localhost:${PORT}${sharedPath(1)}`);
+    console.log(`Proxy reference→ http://localhost:${PORT}${PROXY_OVERVIEW_PATH}`);
     if (PROXY_DEBUG) console.log("Proxy debug logging enabled (PROXY_DEBUG=true)");
     console.log(`Admin panel    → http://localhost:${PORT}/admin`);
     console.log(`Original path  → ${UPSTREAM}${sharedPath(1)}`);

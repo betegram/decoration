@@ -9,8 +9,8 @@ embedded desk (proxied sportsbook on the same origin).
 ./run.sh
 ```
 
-- **Public site:** http://localhost:8080/live-sports/overview/1  
-  (same path as the original URL — only the base host differs)
+- **Public site (designed UI):** http://localhost:8080/live-sports/overview/1  
+- **Proxied upstream SPA:** http://localhost:8080/markets/overview/1
 - **Admin panel:** http://localhost:8080/admin  
   Default login: `admin` / `aurum2026` (set via `.env` or `admin-auth.json`)
 
@@ -33,7 +33,6 @@ When `MONGODB_URI` is set, site config and admin credentials are stored in Mongo
 | `MONGODB_DB` | Database name (default `aurum_markets`) |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Admin panel login |
 | `UPSTREAM` / `BS_UPSTREAM` | Sportsbook API hosts (optional) |
-| `OVERVIEW_SHELL` | `proxy` (original SPA at `/live-sports/overview/*`) or `custom` (AURUM UI) |
 | `OPENAI_API_KEY` | Enables AI translation in Admin → Languages |
 | `OPENAI_MODEL` | OpenAI model (default `gpt-4o-mini`) |
 | `PROXY_DEBUG` | `true` — structured proxy request/response logs (secrets redacted) |
@@ -42,20 +41,20 @@ When `MONGODB_URI` is set, site config and admin credentials are stored in Mongo
 
 See `.cursor/skills/proxy-parity-engineering/SKILL.md` and `docs/PROXY_PARITY_AUDIT.md`.
 
+- **Designed UI** at `/live-sports/overview/*` — AURUM markets page (themes, i18n).
+- **Proxy reference** at `/markets/overview/*` — upstream sportsbook SPA (`/markets/*` → upstream `/live-sports/*`).
+
 ```bash
-node scripts/proxy-diff.mjs          # smoke compare original vs proxy
+node scripts/proxy-diff.mjs          # smoke compare original vs /markets proxy
 PROXY_DEBUG=true ./run.sh            # debug logging
 ```
-
-- **Phase A**: `/live-sports/*` proxies upstream SPA (`OVERVIEW_SHELL=proxy`).
-- **Phase B**: Custom UI at `/markets/*` only after parity tests pass.
 
 ### Multilingual
 
 - **Admin → Languages:** default locale, enabled languages, manual edits, **AI translate missing** (OpenAI).
-- **Public site** (`/markets/overview/1`): language switcher in header; strings from MongoDB/config.
+- **Public site** (`/live-sports/overview/1`): language switcher in header; strings from MongoDB/config.
 - **Cookie:** `aurum_lang`; query `?lang=tr` also works.
-- Proxied overview SPA (`OVERVIEW_SHELL=proxy`) uses upstream UI language — use `/markets` for full i18n.
+- Proxied upstream SPA at `/markets/overview/1` uses upstream UI language.
 
 ### Nginx (ui.kycland.xyz)
 

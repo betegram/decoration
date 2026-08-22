@@ -215,12 +215,13 @@ function renderPanel() {
     panel.innerHTML = `
       <div class="field-card full">
         <h3>Published URL</h3>
-        <p class="hint">Users open this link. The path matches the original sportsbook (<code>/live-sports/overview/1</code>).</p>
+        <p class="hint">Users open this link — the designed AURUM markets page (<code>/live-sports/overview/1</code>).</p>
         <div class="url-row">
           <input id="shareCopy" readonly value="${sharedUrlInput.value}" />
           <button type="button" class="btn primary" id="copyShare">Copy URL</button>
         </div>
-        <p class="hint muted">Original reference: ${meta?.originalUrl || ""}</p>
+        <p class="hint muted">Proxied upstream SPA: <code>${meta?.proxyReferenceUrl || ""}</code></p>
+        <p class="hint muted">Original host: ${meta?.originalUrl || ""}</p>
         <p class="hint">After editing any section, click <strong>Apply changes</strong>. The preview and live site update immediately.</p>
       </div>`;
     document.getElementById("copyShare").onclick = () => copyText(sharedUrlInput.value);
@@ -492,7 +493,7 @@ function copyText(text) {
 }
 
 function refreshPreview() {
-  const base = meta?.marketsPreviewUrl || "/markets/overview/1";
+  const base = meta?.sharedUrl || "/live-sports/overview/1";
   const lang = langEditLocale || config?.i18n?.defaultLocale || "en";
   previewFrame.src = `${base}?lang=${encodeURIComponent(lang)}&t=${Date.now()}`;
 }

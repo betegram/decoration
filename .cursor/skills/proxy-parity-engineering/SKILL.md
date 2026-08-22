@@ -76,9 +76,9 @@ After each fix, verify: page load, sports, live events, filters, event desk, odd
 |------|----------|-------|
 | `/api/bs/*` | `BS_UPSTREAM` | REST sports data |
 | `/api/flag/*` | `UPSTREAM` | Flag assets |
-| `/api/i18n.json` | local | Phase B i18n (custom `/markets` UI) |
-| `/assets/*`, `/live-sports/*` | `UPSTREAM` | SPA shell + routes |
-| WS (browser direct) | `bs-iframedev1` | Often cross-origin from proxy host |
-| `/markets/*` | local | Phase B custom UI — not parity target |
+| `/api/i18n.json` | local | i18n for designed `/live-sports/overview` UI |
+| `/assets/*`, `/live-sports/*` (except overview) | `UPSTREAM` | SPA routes + assets |
+| `/markets/*` | `UPSTREAM` (`/live-sports/*`) | Proxied upstream SPA |
+| `/live-sports/overview/*` | local | Designed AURUM markets UI |
 
-`OVERVIEW_SHELL=proxy` → `/live-sports/overview/*` must return upstream SPA, not `index.html`.
+`/live-sports/overview/*` returns custom `index.html`. `/markets/overview/*` proxies upstream SPA.
