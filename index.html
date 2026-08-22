@@ -69,32 +69,32 @@
       </section>
     </main>
     </div>
-
-    <aside class="ticket" id="ticket" data-i18n-attr="aria-label" data-i18n="site.ticket_aria" aria-label="Trade ticket">
-      <div class="ticket-head">
-        <h2 data-i18n="site.ticket_heading">Ticket</h2>
-        <div class="ticket-head-actions">
-          <button type="button" class="text-btn" id="clearTicket" data-i18n="site.ticket_clear">Clear</button>
-          <button type="button" class="ticket-close" id="ticketClose" data-i18n-attr="aria-label" data-i18n="site.close_ticket" aria-label="Close ticket">✕</button>
-        </div>
-      </div>
-      <div class="ticket-body" id="ticketBody">
-        <p class="ticket-empty" data-i18n="site.ticket_empty">Select a market outcome to build your ticket.</p>
-      </div>
-      <div class="ticket-foot">
-        <label class="stake">
-          <span data-i18n="site.stake_label">Stake</span>
-          <input id="stakeInput" type="number" min="0" step="1" value="10" />
-        </label>
-        <div class="returns">
-          <span data-i18n="site.potential_return">Potential return</span>
-          <strong id="potentialReturn">—</strong>
-        </div>
-        <button type="button" class="primary" id="openTrade" disabled data-i18n="site.open_trade">Open trade desk</button>
-        <p class="fine" data-i18n="site.open_trade_fine">Opens the live event desk to complete the trade on the connected engine.</p>
-      </div>
-    </aside>
   </div>
+
+  <aside class="ticket" id="ticket" data-i18n-attr="aria-label" data-i18n="site.ticket_aria" aria-label="Trade ticket">
+    <div class="ticket-head">
+      <h2 data-i18n="site.ticket_heading">Ticket</h2>
+      <div class="ticket-head-actions">
+        <button type="button" class="text-btn" id="clearTicket" data-i18n="site.ticket_clear">Clear</button>
+        <button type="button" class="ticket-close" id="ticketClose" data-i18n-attr="aria-label" data-i18n="site.close_ticket" aria-label="Close ticket">✕</button>
+      </div>
+    </div>
+    <div class="ticket-body" id="ticketBody">
+      <p class="ticket-empty" data-i18n="site.ticket_empty">Select a market outcome to build your ticket.</p>
+    </div>
+    <div class="ticket-foot">
+      <label class="stake">
+        <span data-i18n="site.stake_label">Stake</span>
+        <input id="stakeInput" type="number" min="0" step="1" value="10" />
+      </label>
+      <div class="returns">
+        <span data-i18n="site.potential_return">Potential return</span>
+        <strong id="potentialReturn">—</strong>
+      </div>
+      <button type="button" class="primary" id="openTrade" disabled data-i18n="site.open_trade">Open trade desk</button>
+      <p class="fine" data-i18n="site.open_trade_fine">Opens the live event desk to complete the trade on the connected engine.</p>
+    </div>
+  </aside>
 
   <div class="desk" id="desk" hidden>
     <div class="desk-backdrop" data-close-desk></div>

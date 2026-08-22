@@ -887,6 +887,22 @@ function syncChromeMetrics() {
   document.documentElement.style.setProperty("--topbar-height", `${Math.ceil(height)}px`);
   document.documentElement.style.setProperty("--filter-sticky-top", `${Math.ceil(height)}px`);
   document.documentElement.style.setProperty("--ticket-sticky-top", `${Math.ceil(height) + 12}px`);
+
+  const shell = document.querySelector(".page-shell");
+  const ticketHidden =
+    document.body.classList.contains("hide-ticket") || document.body.classList.contains("layout-feed");
+  if (!shell || isMobileTicket() || ticketHidden) {
+    document.documentElement.style.removeProperty("--ticket-rail-right");
+    return;
+  }
+  const rect = shell.getBoundingClientRect();
+  const gutter =
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--gutter-x")) || 20;
+  const ticketRight = rect.right - gutter;
+  document.documentElement.style.setProperty(
+    "--ticket-rail-right",
+    `${Math.max(0, Math.ceil(window.innerWidth - ticketRight))}px`
+  );
 }
 
 function scheduleChromeMetrics() {

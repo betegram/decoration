@@ -221,21 +221,14 @@ body {
 
 /* —— Layout —— */
 .page-shell {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: var(--shell-gap);
+  display: block;
   max-width: min(var(--layout-max, 1400px), 100%);
   margin: 0 auto;
   padding: var(--page-pad-top) var(--gutter-x) var(--page-pad-bottom);
   padding-left: max(var(--gutter-x), env(safe-area-inset-left, 0px));
   padding-right: max(var(--gutter-x), env(safe-area-inset-right, 0px));
   width: 100%;
-}
-.page-shell > .layout {
-  flex: 1 1 0%;
-  min-width: 0;
-  max-width: 100%;
+  box-sizing: border-box;
 }
 .layout {
   display: block;
@@ -446,7 +439,6 @@ body {
   -webkit-backdrop-filter: blur(4px);
 }
 body.hide-ticket .fab { display: none !important; }
-body.hide-ticket .page-shell > .layout { max-width: 100%; }
 body.hide-ticket .ticket { display: none !important; }
 .ticket-head-actions {
   display: flex;
@@ -454,13 +446,9 @@ body.hide-ticket .ticket { display: none !important; }
   gap: 0.5rem;
 }
 .ticket {
-  position: sticky;
-  top: var(--ticket-sticky-top);
-  flex: 0 0 var(--ticket-width, 320px);
-  width: var(--ticket-width, 320px);
-  max-width: min(var(--ticket-width, 320px), 100%);
+  width: var(--ticket-rail-width, var(--ticket-width, 320px));
+  max-width: var(--ticket-rail-width, var(--ticket-width, 320px));
   min-width: 0;
-  max-height: calc(100vh - var(--ticket-sticky-top) - 1.5rem);
   border-radius: var(--r-lg);
   background: var(--surface-bg-2, var(--panel-2));
   border: 1px solid var(--surface-border-strong, var(--line-2));
@@ -468,15 +456,8 @@ body.hide-ticket .ticket { display: none !important; }
   backdrop-filter: var(--surface-blur-filter, blur(22px));
   -webkit-backdrop-filter: var(--surface-blur-filter, blur(22px));
   overflow: hidden;
-  z-index: 2;
   display: flex;
   flex-direction: column;
-  align-self: flex-start;
-}
-body.layout-wide:not(.hide-ticket):not(.layout-feed) .ticket {
-  flex-basis: calc(var(--ticket-width, 320px) + 40px);
-  width: calc(var(--ticket-width, 320px) + 40px);
-  max-width: calc(var(--ticket-width, 320px) + 40px);
 }
 .ticket-body {
   padding: 0.75rem 1rem;
@@ -588,6 +569,17 @@ body.layout-wide:not(.hide-ticket):not(.layout-feed) .ticket {
 }
 
 @media (min-width: 1101px) {
+  body:not(.hide-ticket):not(.layout-feed) {
+    --ticket-rail-width: var(--ticket-width, 320px);
+  }
+  body.layout-wide:not(.hide-ticket):not(.layout-feed) {
+    --ticket-rail-width: calc(var(--ticket-width, 320px) + 40px);
+  }
+  body:not(.hide-ticket):not(.layout-feed) .page-shell {
+    padding-right: calc(
+      var(--ticket-rail-width) + var(--shell-gap) + max(var(--gutter-x), env(safe-area-inset-right, 0px))
+    );
+  }
   body:not(.hide-ticket):not(.layout-feed) #ticketToggle {
     display: none;
   }
@@ -597,35 +589,24 @@ body.layout-wide:not(.hide-ticket):not(.layout-feed) .ticket {
   }
   body:not(.hide-ticket):not(.layout-feed) .ticket {
     display: flex !important;
-    position: sticky !important;
-    left: auto !important;
-    right: auto !important;
-    bottom: auto !important;
+    position: fixed !important;
     top: var(--ticket-sticky-top) !important;
-    flex: 0 0 var(--ticket-width, 320px) !important;
-    width: var(--ticket-width, 320px) !important;
-    max-width: min(var(--ticket-width, 320px), 100%) !important;
-    z-index: 2 !important;
-    border-radius: var(--r-lg) !important;
+    right: var(--ticket-rail-right, max(var(--gutter-x), env(safe-area-inset-right, 0px))) !important;
+    left: auto !important;
+    bottom: auto !important;
+    width: var(--ticket-rail-width) !important;
+    max-width: var(--ticket-rail-width) !important;
     max-height: calc(100vh - var(--ticket-sticky-top) - 1.5rem) !important;
+    z-index: 10 !important;
+    border-radius: var(--r-lg) !important;
     transform: none !important;
-  }
-  body.layout-wide:not(.hide-ticket):not(.layout-feed) .ticket {
-    flex-basis: calc(var(--ticket-width, 320px) + 40px) !important;
-    width: calc(var(--ticket-width, 320px) + 40px) !important;
-    max-width: calc(var(--ticket-width, 320px) + 40px) !important;
+    box-shadow: var(--surface-shadow, var(--shadow)) !important;
   }
 }
 
 @media (max-width: 1100px) {
   .page-shell {
-    flex-direction: column;
     padding-bottom: calc(var(--fab-clearance) + env(safe-area-inset-bottom, 0px));
-    gap: 0;
-  }
-  .page-shell > .layout {
-    flex: 1 1 auto;
-    max-width: 100%;
   }
   .layout {
     padding-bottom: 0;
@@ -639,8 +620,6 @@ body.layout-wide:not(.hide-ticket):not(.layout-feed) .ticket {
     top: auto;
     width: 100%;
     max-width: none;
-    flex: none;
-    align-self: auto;
     z-index: 46;
     border-radius: 22px 22px 0 0;
     max-height: min(75dvh, 520px);
