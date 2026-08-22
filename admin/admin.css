@@ -21,6 +21,10 @@
 html, body { height: 100%; }
 body { font-family: var(--font); color: var(--ink); background: var(--bg); }
 
+.ig-login.is-hidden,
+.app.is-hidden,
+.toast[hidden] { display: none !important; }
+
 /* —— iGaming operator login —— */
 .ig-login {
   position: relative; min-height: 100vh; display: flex; align-items: center; justify-content: center;

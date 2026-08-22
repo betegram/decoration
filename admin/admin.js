@@ -302,14 +302,19 @@ const loginBtn = document.getElementById("loginBtn");
 const passwordInput = document.getElementById("passwordInput");
 const togglePwd = document.getElementById("togglePwd");
 
+/** guest | authed — prevents stale session bootstrap from reverting a successful login */
+let authState = "guest";
+
 function showLogin() {
-  loginView.hidden = false;
-  appView.hidden = true;
+  authState = "guest";
+  loginView.classList.remove("is-hidden");
+  appView.classList.add("is-hidden");
 }
 
 function showApp() {
-  loginView.hidden = true;
-  appView.hidden = false;
+  authState = "authed";
+  loginView.classList.add("is-hidden");
+  appView.classList.remove("is-hidden");
 }
 
 if (togglePwd && passwordInput) {
@@ -340,6 +345,7 @@ loginForm.addEventListener("submit", async (e) => {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
+    authState = "authed";
     await loadApp();
     showApp();
     showToast("Welcome back, operator");
@@ -385,11 +391,16 @@ document.getElementById("nav").addEventListener("click", (e) => {
   renderPanel();
 });
 
-api("/admin/api/session")
-  .then(async (s) => {
-    if (s.loggedIn) {
+async function bootstrap() {
+  try {
+    const s = await api("/admin/api/session");
+    if (s.loggedIn && authState !== "authed") {
       await loadApp();
       showApp();
     }
-  })
-  .catch(() => showLogin());
+  } catch {
+    if (authState !== "authed") showLogin();
+  }
+}
+
+bootstrap();
