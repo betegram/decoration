@@ -230,7 +230,7 @@ function renderPanel() {
   if (def.themes && meta?.themes) {
     const wrap = document.createElement("div");
     wrap.className = "field-card full";
-    wrap.innerHTML = "<h3>Predefined design systems</h3><p class='hint'>Select a theme to apply colors, typography, structure, and visual effects. Click <strong>Apply changes</strong> to publish.</p><div class='theme-grid' id='themeGrid'></div>";
+    wrap.innerHTML = "<h3>Predefined design systems</h3><p class='hint'>Each theme applies a full design system: surfaces, blur, shadows, typography, radii, and component chrome — not only colors. Click <strong>Apply changes</strong> to publish.</p><div class='theme-grid' id='themeGrid'></div>";
     panel.appendChild(wrap);
     const grid = wrap.querySelector("#themeGrid");
     const active = config.theme?.preset || "polymarket";
@@ -238,7 +238,10 @@ function renderPanel() {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = `theme-card${active === id ? " is-active" : ""}`;
-      btn.innerHTML = `<span class="theme-concept">${t.concept}</span><strong>${t.label}</strong><span>${t.desc}</span>`;
+      const bg = t.config?.colors?.background || "#07080c";
+      const accent = t.config?.colors?.accent || "#0a84ff";
+      const panel = t.config?.colors?.panel || "#10121a";
+      btn.innerHTML = `<div class="theme-preview" style="background:linear-gradient(145deg,${bg} 0%,${panel} 55%,${accent}33 100%)"></div><span class="theme-concept">${t.concept}</span><strong>${t.label}</strong><span>${t.desc}</span>`;
       btn.onclick = () => {
         const preset = meta.themes[id];
         if (preset?.config) {
