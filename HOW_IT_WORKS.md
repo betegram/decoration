@@ -73,10 +73,11 @@ Live prices on cards come from the socket `liveSportOverview` payload when avail
 ## Run
 
 ```bash
+cp .env.example .env
 ./run.sh
 ```
 
-Requires **Node.js 18+**. No npm install.
+Requires **Docker** on the host. Node.js and `npm install` are **not** required on the server — dependencies are installed in the container image at build time.
 
 ## Admin customization
 

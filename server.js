@@ -2,6 +2,7 @@
  * AURUM Markets — server + admin API + config-driven theming
  */
 import { createServer } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { readFile, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import { dirname, join, extname } from "path";
@@ -35,6 +36,7 @@ const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.HOST || "0.0.0.0";
 const UPSTREAM = process.env.UPSTREAM || "https://iframedev1.thesportslab.eu";
 const BS = process.env.BS_UPSTREAM || "https://bs-iframedev1.thesportslab.eu";
+const BS_WS_ORIGIN = BS.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
 const LIVE_OVERVIEW_RE = /^\/live-sports\/overview\/\d+\/?$/;
 const PROXY_OVERVIEW_PATH = "/markets/overview/1";
 const USER_AGENT =
@@ -480,6 +482,61 @@ async function handleAdminApi(req, res, pathname, method) {
   return false;
 }
 
+function attachSocketProxy(httpServer) {
+  const wss = new WebSocketServer({ noServer: true });
+
+  httpServer.on("upgrade", (req, socket, head) => {
+    const url = req.url || "";
+    if (!url.startsWith("/socket/")) {
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (client) => {
+      const target = `${BS_WS_ORIGIN}${url}`;
+      proxyLog("ws→upstream", { url, target });
+      const upstream = new WebSocket(target, {
+        headers: {
+          Origin: BS,
+          "User-Agent": USER_AGENT,
+        },
+      });
+
+      const closeBoth = () => {
+        try {
+          if (client.readyState !== WebSocket.CLOSED) client.close();
+        } catch {
+          /* ignore */
+        }
+        try {
+          if (upstream.readyState !== WebSocket.CLOSED) upstream.close();
+        } catch {
+          /* ignore */
+        }
+      };
+
+      upstream.on("open", () => {
+        proxyLog("ws←upstream", { status: "open", url });
+      });
+      client.on("message", (data, isBinary) => {
+        if (upstream.readyState === WebSocket.OPEN) upstream.send(data, { binary: isBinary });
+      });
+      upstream.on("message", (data, isBinary) => {
+        if (client.readyState === WebSocket.OPEN) client.send(data, { binary: isBinary });
+      });
+      client.on("close", () => upstream.close());
+      upstream.on("close", () => client.close());
+      client.on("error", (err) => {
+        proxyLog("ws-client-error", { message: err.message });
+        closeBoth();
+      });
+      upstream.on("error", (err) => {
+        proxyLog("ws-upstream-error", { message: err.message });
+        closeBoth();
+      });
+    });
+  });
+}
+
 const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.writeHead(204, cors());
@@ -503,13 +560,15 @@ const server = createServer(async (req, res) => {
   }
 
   if (pathname === "/api/runtime-config.json" && method === "GET") {
+    const host = req.headers.host || `localhost:${PORT}`;
+    const proto = req.headers["x-forwarded-proto"] || "http";
     send(
       res,
       200,
       JSON.stringify({
         apiBase: "/api/bs",
         flagBase: "/api/flag",
-        wsUrl: BS,
+        wsUrl: `${proto}://${host}`,
         wsPath: "/socket/",
         designedPath: sharedPath(1),
         proxyPath: PROXY_OVERVIEW_PATH,
@@ -602,6 +661,7 @@ const server = createServer(async (req, res) => {
 
 async function start() {
   await initStore(ROOT);
+  attachSocketProxy(server);
   server.listen(PORT, HOST, async () => {
     await refreshConfig();
     console.log(`Designed UI    → http://localhost:${PORT}${sharedPath(1)}`);

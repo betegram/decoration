@@ -29,4 +29,4 @@ upstream aurum_markets {
 
 ## Docker on same host
 
-With `docker compose up`, port `8080` is published to the host — `127.0.0.1:8080` is correct for nginx on the same machine.
+With `docker compose up`, the app listens on `PORT` from `.env` inside the container and is published to the same port on the host — set nginx `upstream` to `127.0.0.1:YOUR_PORT` (e.g. `7007` if `PORT=7007`).

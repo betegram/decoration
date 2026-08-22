@@ -27,6 +27,7 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -140,6 +141,28 @@ body {
   color: var(--ink); background: var(--fill-2); border-color: var(--line-2);
 }
 
+/* —— Date range —— */
+.date-rail-wrap {
+  border-bottom: 1px solid var(--line);
+  background: rgba(8, 9, 13, 0.55);
+}
+.date-rail {
+  display: flex; gap: 0.35rem; padding: 0.45rem 1.25rem 0.55rem;
+  overflow-x: auto; scrollbar-width: none;
+}
+.date-rail::-webkit-scrollbar { display: none; }
+.date-rail button {
+  flex: 0 0 auto; height: 30px; padding: 0 0.75rem;
+  border-radius: var(--r-pill); border: 1px solid var(--line);
+  background: transparent; color: var(--muted);
+  font: 600 0.74rem var(--font); cursor: pointer;
+  transition: 150ms var(--ease);
+}
+.date-rail button:hover { color: var(--ink); background: var(--fill); }
+.date-rail button.is-active {
+  color: #fff; background: var(--blue); border-color: transparent;
+}
+
 /* —— Filter chips —— */
 .filter-rail-wrap {
   position: sticky; top: 57px; z-index: 30;
@@ -191,9 +214,24 @@ body {
 .groups { display: flex; flex-direction: column; gap: 1.35rem; }
 .group-head {
   display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.55rem;
+  width: 100%; border: 0; background: transparent; color: inherit;
+  text-align: left; cursor: pointer; padding: 0.15rem 0;
 }
 .group-head img { width: 18px; height: 18px; border-radius: 50%; }
 .group-head h3 { font-size: 0.82rem; font-weight: 650; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+.group-head .chev { margin-left: auto; color: var(--faint); font-size: 0.7rem; transition: transform 160ms var(--ease); }
+.group-section.is-collapsed .cards { display: none; }
+.group-section.is-collapsed .chev { transform: rotate(-90deg); }
+.fav-btn {
+  border: 0; background: transparent; color: var(--faint); cursor: pointer;
+  font-size: 0.85rem; line-height: 1; padding: 0.15rem;
+}
+.fav-btn.is-on { color: #ffd60a; }
+.market-rows { display: flex; flex-direction: column; gap: 0.45rem; }
+.market-row-label {
+  font-size: 0.62rem; font-weight: 650; color: var(--faint);
+  letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 0.2rem;
+}
 .cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -218,6 +256,7 @@ body {
   font-size: 0.72rem; color: var(--faint);
 }
 .card-top .left { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.card-top-actions { display: flex; align-items: center; gap: 0.45rem; }
 .card-top img { width: 14px; height: 14px; border-radius: 50%; }
 .pill-live {
   display: inline-flex; align-items: center; gap: 0.3rem;

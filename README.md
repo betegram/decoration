@@ -3,27 +3,38 @@
 Sports market discovery UI powered by thesportslab APIs. Event trading opens in an
 embedded desk (proxied sportsbook on the same origin).
 
-## Run
+## Run (Docker only — no Node/npm on the host)
+
+**Requirements on the server:** Docker and Docker Compose only.
 
 ```bash
+cp .env.example .env   # set MONGODB_URI, ADMIN_PASSWORD, PORT, etc.
 ./run.sh
 ```
 
-- **Public site (designed UI):** http://localhost:8080/live-sports/overview/1  
-- **Proxied upstream SPA:** http://localhost:8080/markets/overview/1
-- **Admin panel:** http://localhost:8080/admin  
-  Default login: `admin` / `aurum2026` (set via `.env` or `admin-auth.json`)
+`./run.sh` runs `docker compose up --build`. All npm dependencies (`mongodb`, `ws`, …) are installed **inside the image** during `docker build`, not on the host.
 
-See **[How it works](HOW_IT_WORKS.md)** for architecture and data flow.
-
-### Docker
+Equivalent:
 
 ```bash
-cp .env.example .env   # set MONGODB_URI and secrets
 docker compose up --build
 ```
 
-When `MONGODB_URI` is set, site config and admin credentials are stored in MongoDB.
+- **Public site (designed UI):** `http://localhost:${PORT}/live-sports/overview/1`  
+- **Proxied upstream SPA:** `http://localhost:${PORT}/markets/overview/1`
+- **Admin panel:** `http://localhost:${PORT}/admin`  
+  Default login: `admin` / `aurum2026` (set via `.env`)
+
+See **[How it works](HOW_IT_WORKS.md)** for architecture and data flow.
+
+### Production deploy (ui.kycland.xyz)
+
+```bash
+git pull
+docker compose up --build -d
+```
+
+Match nginx upstream port to `PORT` in `.env` (see [`nginx/README.md`](nginx/README.md)).
 
 | Variable | Description |
 | --- | --- |
@@ -45,8 +56,8 @@ See `.cursor/skills/proxy-parity-engineering/SKILL.md` and `docs/PROXY_PARITY_AU
 - **Proxy reference** at `/markets/overview/*` — upstream sportsbook SPA (`/markets/*` → upstream `/live-sports/*`).
 
 ```bash
-node scripts/proxy-diff.mjs          # smoke compare original vs /markets proxy
-PROXY_DEBUG=true ./run.sh            # debug logging
+node scripts/proxy-diff.mjs          # optional smoke compare (needs Node on your machine)
+PROXY_DEBUG=true docker compose up --build
 ```
 
 ### Multilingual

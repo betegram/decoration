@@ -2,8 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
+# Install production dependencies inside the image (mongodb, ws, …).
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 
 COPY . .
 

@@ -9,22 +9,34 @@ let FLAG = "/api/flag";
 let WS_URL = "https://bs-iframedev1.thesportslab.eu";
 let WS_PATH = "/socket/";
 
+const DATE_RANGES = [
+  { id: 0, labelKey: "site.date_today" },
+  { id: 1, labelKey: "site.date_tomorrow" },
+  { id: 2, labelKey: "site.date_plus2" },
+  { id: 7, labelKey: "site.date_week" },
+];
+
 const state = {
   sports: [],
   sportId: 1,
+  dateRange: 0,
   fixtures: [],
   featuredComps: [],
-  overview: null, // liveSportOverview payload
-  filter: "all", // all | live | upcoming | competition id
+  overview: null,
+  overviewMarkets: {},
+  filter: "all",
   search: "",
-  ticket: [], // {fixtureId, uuid, label, price, eventLabel, selection}
+  ticket: [],
   stake: 10,
   loading: true,
   feedLabel: "markets",
+  favourites: new Set(),
+  collapsedGroups: new Set(),
 };
 
 const el = {
   sportNav: document.getElementById("sportNav"),
+  dateRail: document.getElementById("dateRail"),
   filterRail: document.getElementById("filterRail"),
   featuredTrack: document.getElementById("featuredTrack"),
   featuredSub: document.getElementById("featuredSub"),
@@ -120,49 +132,147 @@ function crest(url, name) {
   return `<span class="crest-ph">${esc(initials(name))}</span>`;
 }
 
-/** Pull 1X2-style outcomes from overview socket fixture if present */
-function marketsFromOverview(fixtureId) {
-  const ov = state.overview;
-  if (!ov || typeof ov !== "object") return null;
-  const fx = ov[fixtureId] || ov[String(fixtureId)];
-  if (!fx) return null;
-
-  // Common shapes: overview_markets.match_result / markets / odds arrays
-  const bag =
-    fx.overview_markets ||
-    fx.markets ||
-    fx.odds ||
-    fx.primary_markets ||
-    null;
-
-  if (!bag) {
-    // Sometimes odds hang directly as array of selections
-    if (Array.isArray(fx.selections)) return normalizeSelections(fx.selections, fx);
-    return null;
+function loadFavourites() {
+  try {
+    const raw = localStorage.getItem("aurum_favourites");
+    const ids = JSON.parse(raw || "[]");
+    state.favourites = new Set(ids.map(String));
+  } catch {
+    state.favourites = new Set();
   }
+}
 
-  // Prefer match_result / 1x2
-  const preferred = ["match_result", "1x2", "winner", "match-winner", "three_way"];
-  let market = null;
-  if (typeof bag === "object" && !Array.isArray(bag)) {
-    for (const key of preferred) {
-      if (bag[key]) {
-        market = bag[key];
-        break;
+function saveFavourites() {
+  localStorage.setItem("aurum_favourites", JSON.stringify([...state.favourites]));
+}
+
+function wsLocale() {
+  return (window.AurumI18n?.getLocale?.() || "en").split("-")[0].toLowerCase() || "en";
+}
+
+function sportMarketDefs(sportId) {
+  const defs = state.overviewMarkets?.[sportId] || state.overviewMarkets?.[String(sportId)];
+  return Array.isArray(defs) ? defs : [];
+}
+
+function sportMarketDef(sportId, slug) {
+  return sportMarketDefs(sportId).find((d) => d.slug === slug);
+}
+
+function primaryMarketSlugs(sportId) {
+  const defs = sportMarketDefs(sportId);
+  const preferred = [
+    "match_result",
+    "match_winner_tennis",
+    "total_goals",
+    "total_games",
+    "total_points",
+  ];
+  const picked = [];
+  for (const slug of preferred) {
+    if (defs.some((d) => d.slug === slug)) picked.push(slug);
+    if (picked.length >= 2) break;
+  }
+  if (picked.length < 2) {
+    for (const d of defs) {
+      if (
+        !picked.includes(d.slug) &&
+        (d.market_type === "simple" || d.market_type === "totals_new" || d.market_type === "handicap_new")
+      ) {
+        picked.push(d.slug);
+        if (picked.length >= 2) break;
       }
     }
-    if (!market) market = Object.values(bag)[0];
-  } else if (Array.isArray(bag)) {
-    market = bag.find((m) => /match|1x2|winner/i.test(m?.slug || m?.name || "")) || bag[0];
   }
+  return picked;
+}
 
-  if (!market) return null;
-  const odds = market.odds || market.selections || market.outcomes || market;
-  if (Array.isArray(odds)) return normalizeSelections(odds, fx);
-  if (typeof odds === "object") {
-    return normalizeSelections(Object.values(odds), fx);
+function mergeFixtureFromOverview(fx) {
+  if (!fx?.id) return;
+  const idx = state.fixtures.findIndex((f) => String(f.id) === String(fx.id));
+  if (idx >= 0) {
+    state.fixtures[idx] = { ...state.fixtures[idx], ...fx };
+  } else if (fx.live) {
+    state.fixtures.push(fx);
   }
-  return null;
+}
+
+function applyJsonPatch(root, patches) {
+  if (!Array.isArray(patches)) return;
+  for (const patch of patches) {
+    const { op, path, value } = patch;
+    if (!path) continue;
+    const parts = path.split("/").filter(Boolean);
+    if (parts.length === 1) {
+      if (op === "add" || op === "replace") {
+        root[parts[0]] = value;
+        if (value?.id) mergeFixtureFromOverview(value);
+      } else if (op === "remove") {
+        delete root[parts[0]];
+      }
+      continue;
+    }
+    let parent = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const key = parts[i];
+      if (parent[key] == null || typeof parent[key] !== "object") parent[key] = {};
+      parent = parent[key];
+    }
+    const leaf = parts[parts.length - 1];
+    if (op === "add" || op === "replace") parent[leaf] = value;
+    else if (op === "remove") delete parent[leaf];
+    const fx = root[parts[0]];
+    if (fx?.id) mergeFixtureFromOverview(fx);
+  }
+}
+
+function applyOverviewPayload(payload) {
+  if (!payload) return;
+  if (Array.isArray(payload)) {
+    if (!state.overview) state.overview = {};
+    applyJsonPatch(state.overview, payload);
+    return;
+  }
+  if (typeof payload === "object") {
+    state.overview = payload;
+    for (const fx of Object.values(payload)) {
+      if (fx && typeof fx === "object" && fx.id) mergeFixtureFromOverview(fx);
+    }
+  }
+}
+
+function fixtureOverview(fx) {
+  const ov = state.overview?.[fx.id] || state.overview?.[String(fx.id)];
+  return {
+    ...fx,
+    ...(ov || {}),
+    overview_markets: ov?.overview_markets || fx.overview_markets,
+  };
+}
+
+function selectionsFromMarket(marketObj, fx) {
+  if (!marketObj) return [];
+  let list;
+  if (Array.isArray(marketObj)) list = marketObj;
+  else if (typeof marketObj === "object") {
+    list = Object.values(marketObj).sort((a, b) => Number(a?.col ?? 0) - Number(b?.col ?? 0));
+  } else return [];
+  return normalizeSelections(list, fx);
+}
+
+function marketsForFixture(fx, slug) {
+  const merged = fixtureOverview(fx);
+  const bag = merged.overview_markets;
+  if (!bag || !slug || !bag[slug]) return null;
+  return selectionsFromMarket(bag[slug], merged);
+}
+
+/** Pull overview odds for a fixture (primary market slug from sport config) */
+function marketsFromOverview(fixtureId, slug) {
+  const fx = state.fixtures.find((f) => String(f.id) === String(fixtureId));
+  if (!fx) return null;
+  const marketSlug = slug || primaryMarketSlugs(fx.sport_id)[0] || "match_result";
+  return marketsForFixture(fx, marketSlug);
 }
 
 function normalizeSelections(list, fx) {
@@ -172,17 +282,19 @@ function normalizeSelections(list, fx) {
     .map((o, idx) => {
       const price = Number(o.price ?? o.odds ?? o.value ?? o.decimal);
       const label =
+        o.name_short ||
         o.name_overview ||
         o.name ||
         o.header_name ||
         o.label ||
         ["1", "X", "2"][idx] ||
         "—";
+      const status = o.status || "available";
       return {
         uuid: o.uuid || o.odd_uuid || o.id || `${fx?.id || "x"}-${idx}`,
         label: String(label),
         price: Number.isFinite(price) ? price : null,
-        status: o.status || "active",
+        status,
         raw: o,
       };
     });
@@ -208,6 +320,7 @@ function filteredFixtures() {
 
   if (state.filter === "live") list = list.filter((f) => f.live);
   else if (state.filter === "upcoming") list = list.filter((f) => !f.live);
+  else if (state.filter === "favourites") list = list.filter((f) => state.favourites.has(String(f.id)));
   else if (state.filter !== "all") list = list.filter((f) => String(f.competition_id) === String(state.filter));
 
   const q = state.search.trim().toLowerCase();
@@ -259,12 +372,21 @@ function renderSports() {
     .join("");
 }
 
+function renderDateRail() {
+  if (!el.dateRail) return;
+  el.dateRail.innerHTML = DATE_RANGES.map((d) => {
+    const on = Number(state.dateRange) === Number(d.id);
+    return `<button type="button" class="${on ? "is-active" : ""}" data-date="${esc(d.id)}">${esc(tr(d.labelKey))}</button>`;
+  }).join("");
+}
+
 function renderFilters() {
   const comps = state.featuredComps.slice(0, 10);
   const chips = [
     { id: "all", label: tr("site.filter_all") },
     { id: "live", label: tr("site.filter_live") },
     { id: "upcoming", label: tr("site.filter_upcoming") },
+    { id: "favourites", label: tr("site.filter_favourites") },
     ...comps.map((c) => ({ id: String(c.id), label: c.name })),
   ];
   el.filterRail.innerHTML = chips
@@ -275,26 +397,47 @@ function renderFilters() {
     .join("");
 }
 
+function pickBtnHTML(fx, m) {
+  const disabled =
+    m.status === "suspended" ||
+    m.status === "unavailable" ||
+    m.status === "closed" ||
+    m.price == null;
+  const selected = state.ticket.some((t) => t.uuid === m.uuid);
+  const price = m.price != null ? m.price.toFixed(2) : "—";
+  const [home, away] = fx.participants || [tr("site.home"), tr("site.away")];
+  return `<button type="button" class="mkt-btn ${selected ? "is-on" : ""}" data-pick="${esc(fx.id)}" data-uuid="${esc(m.uuid)}" data-label="${esc(m.label)}" data-price="${m.price ?? ""}" data-event="${esc(`${home} vs ${away}`)}" ${disabled ? "disabled" : ""}>
+    <span>${esc(m.label)}</span><strong>${esc(price)}</strong>
+  </button>`;
+}
+
+function marketRowsHTML(fx) {
+  const slugs = primaryMarketSlugs(fx.sport_id);
+  const rows = slugs
+    .map((slug) => {
+      const def = sportMarketDef(fx.sport_id, slug);
+      const mkts = marketsForFixture(fx, slug);
+      if (!mkts?.length) return "";
+      return `<div class="market-row">
+        <div class="market-row-label">${esc(def?.name || slug)}</div>
+        <div class="markets">${mkts.map((m) => pickBtnHTML(fx, m)).join("")}</div>
+      </div>`;
+    })
+    .filter(Boolean);
+  if (rows.length) return `<div class="market-rows">${rows.join("")}</div>`;
+  let mkts = marketsFromOverview(fx.id);
+  if (!mkts?.length) mkts = placeholderMarkets(fx);
+  return `<div class="markets">${mkts.map((m) => pickBtnHTML(fx, m)).join("")}</div>`;
+}
+
 function cardHTML(fx) {
   const [home, away] = fx.participants || [tr("site.home"), tr("site.away")];
   const logos = fx.participant_logos || {};
   const [h, a] = scoreOf(fx);
   const live = !!fx.live;
   const showScore = live || h > 0 || a > 0;
-  let mkts = marketsFromOverview(fx.id);
-  if (!mkts || !mkts.length) mkts = placeholderMarkets(fx);
   const clock = live ? fx.time || fx.statistics?.half || fx.status || tr("site.live_badge") : fmtTime(fx.start_datetime);
-
-  const mktHtml = mkts
-    .map((m) => {
-      const disabled = m.status === "suspended" || m.price == null;
-      const selected = state.ticket.some((t) => t.uuid === m.uuid);
-      const price = m.price != null ? m.price.toFixed(2) : "—";
-      return `<button type="button" class="mkt-btn ${selected ? "is-on" : ""}" data-pick="${esc(fx.id)}" data-uuid="${esc(m.uuid)}" data-label="${esc(m.label)}" data-price="${m.price ?? ""}" data-event="${esc(`${home} vs ${away}`)}" ${disabled ? "disabled" : ""}>
-        <span>${esc(m.label)}</span><strong>${esc(price)}</strong>
-      </button>`;
-    })
-    .join("");
+  const isFav = state.favourites.has(String(fx.id));
 
   return `<article class="card" data-fx="${esc(fx.id)}">
     <div class="card-top">
@@ -302,13 +445,16 @@ function cardHTML(fx) {
         ${fx.region_icon_url ? `<img src="${esc(flagUrl(fx.region_icon_url))}" alt="" />` : ""}
         <span>${esc(fx.competition_name || "")}</span>
       </div>
-      <div>${live ? `<span class="pill-live"><i></i>${esc(clock)}</span>` : `<span>${esc(clock)}</span>`}</div>
+      <div class="card-top-actions">
+        <button type="button" class="fav-btn ${isFav ? "is-on" : ""}" data-fav="${esc(fx.id)}" aria-label="${esc(isFav ? tr("site.fav_remove_aria") : tr("site.fav_add_aria"))}">★</button>
+        ${live ? `<span class="pill-live"><i></i>${esc(clock)}</span>` : `<span>${esc(clock)}</span>`}
+      </div>
     </div>
     <div class="teams">
       <div class="team">${crest(logos.home, home)}<strong>${esc(home)}</strong><b>${showScore ? h : ""}</b></div>
       <div class="team">${crest(logos.away, away)}<strong>${esc(away)}</strong><b>${showScore ? a : ""}</b></div>
     </div>
-    <div class="markets">${mktHtml}</div>
+    ${marketRowsHTML(fx)}
     <div class="card-foot">
       <span class="status-line">${esc(fx.status || (live ? tr("site.in_play") : tr("site.scheduled")))}</span>
       <button type="button" class="more-btn" data-desk="${esc(fx.id)}" data-title="${esc(`${home} vs ${away}`)}">${esc(tr("site.full_markets"))}</button>
@@ -374,8 +520,13 @@ function renderFeedInner() {
   el.groups.innerHTML = groups
     .map((g) => {
       const flag = flagUrl(g.flag);
-      return `<section>
-        <div class="group-head">${flag ? `<img src="${esc(flag)}" alt="" />` : ""}<h3>${esc(g.key)}</h3></div>
+      const collapsed = state.collapsedGroups.has(g.key);
+      return `<section class="group-section ${collapsed ? "is-collapsed" : ""}">
+        <button type="button" class="group-head" data-collapse="${esc(g.key)}">
+          ${flag ? `<img src="${esc(flag)}" alt="" />` : ""}
+          <h3>${esc(g.key)}</h3>
+          <span class="chev" aria-hidden="true">▼</span>
+        </button>
         <div class="cards">${g.items.slice(0, 12).map(cardHTML).join("")}</div>
       </section>`;
     })
@@ -437,18 +588,39 @@ function closeDesk() {
   document.body.style.overflow = "";
 }
 
+function navigateSport(sportId) {
+  const path = `/live-sports/overview/${sportId}`;
+  if (window.location.pathname !== path) {
+    const url = new URL(window.location.href);
+    url.pathname = path;
+    history.replaceState(null, "", url.toString());
+  }
+}
+
+async function loadOverviewMarkets() {
+  try {
+    const data = await api("/sports/overview_markets");
+    state.overviewMarkets = data && typeof data === "object" ? data : {};
+  } catch (err) {
+    console.warn("overview_markets", err);
+    state.overviewMarkets = {};
+  }
+}
+
 async function loadSport(sportId) {
   state.sportId = Number(sportId);
   state.filter = "all";
   state.loading = true;
   state.overview = null;
+  navigateSport(state.sportId);
   renderSports();
+  renderDateRail();
   renderFilters();
   renderFeed();
 
   try {
     const [fixtures, featured] = await Promise.all([
-      api(`/fixtures/${state.sportId}/daterange/0`),
+      api(`/fixtures/${state.sportId}/daterange/${state.dateRange}`),
       api(`/sport/${state.sportId}/competitions/featured`).catch(() => []),
     ]);
     state.fixtures = Array.isArray(fixtures) ? fixtures : [];
@@ -465,15 +637,35 @@ async function loadSport(sportId) {
   }
 }
 
+async function reloadFixtures() {
+  try {
+    const fixtures = await api(`/fixtures/${state.sportId}/daterange/${state.dateRange}`);
+    if (Array.isArray(fixtures)) {
+      state.fixtures = fixtures;
+      renderFeed();
+    }
+  } catch {
+    /* silent poll */
+  }
+}
+
 /* —— Live overview via socket.io (same engine as original board) —— */
 let socket = null;
 let joinedSport = null;
+let socketLocale = null;
 
 function joinOverviewSocket(sportId) {
   if (typeof io !== "function") return;
-  if (!socket) {
+  const locale = wsLocale();
+  if (!socket || socketLocale !== locale) {
+    if (socket) {
+      socket.disconnect();
+      socket = null;
+      joinedSport = null;
+    }
+    socketLocale = locale;
     try {
-      socket = io(`${WS_URL}/sb-en`, {
+      socket = io(`${WS_URL}/sb-${locale}`, {
         path: WS_PATH,
         transports: ["websocket"],
         withCredentials: false,
@@ -482,21 +674,15 @@ function joinOverviewSocket(sportId) {
         if (joinedSport) socket.emit("join-liveSportOverview", joinedSport);
       });
       socket.on("liveSportOverview", (payload) => {
-        state.overview = payload;
+        applyOverviewPayload(payload);
         renderFeed();
       });
       socket.on("liveSportOverviewUpdate", (payload) => {
-        // patch-style or full — try merge
-        if (payload && typeof payload === "object") {
-          if (!state.overview) state.overview = {};
-          if (payload.patch) {
-            // unknown patch format — request isn't available; shallow assign if dict
-            Object.assign(state.overview, payload.patch);
-          } else {
-            Object.assign(state.overview, payload);
-          }
-          renderFeed();
-        }
+        applyOverviewPayload(payload);
+        renderFeed();
+      });
+      socket.on("connect_error", (err) => {
+        console.warn("socket connect_error", err.message);
       });
     } catch (err) {
       console.warn("socket unavailable", err);
@@ -517,6 +703,22 @@ el.sportNav.addEventListener("click", (e) => {
   loadSport(btn.dataset.sport);
 });
 
+if (el.dateRail) {
+  el.dateRail.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-date]");
+    if (!btn) return;
+    state.dateRange = Number(btn.dataset.date);
+    state.loading = true;
+    renderDateRail();
+    renderFeed();
+    reloadFixtures().finally(() => {
+      state.loading = false;
+      renderFeed();
+      joinOverviewSocket(state.sportId);
+    });
+  });
+}
+
 el.filterRail.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-filter]");
   if (!btn) return;
@@ -531,6 +733,23 @@ el.searchInput.addEventListener("input", () => {
 });
 
 document.body.addEventListener("click", (e) => {
+  const fav = e.target.closest("[data-fav]");
+  if (fav) {
+    const id = String(fav.dataset.fav);
+    if (state.favourites.has(id)) state.favourites.delete(id);
+    else state.favourites.add(id);
+    saveFavourites();
+    renderFeed();
+    return;
+  }
+  const collapse = e.target.closest("[data-collapse]");
+  if (collapse) {
+    const key = collapse.dataset.collapse;
+    if (state.collapsedGroups.has(key)) state.collapsedGroups.delete(key);
+    else state.collapsedGroups.add(key);
+    renderFeed();
+    return;
+  }
   const pick = e.target.closest("[data-pick]");
   if (pick) {
     addPick({
@@ -617,6 +836,7 @@ function applySiteConfig(cfg) {
 }
 
 async function boot() {
+  loadFavourites();
   el.skeletons.hidden = false;
   el.skeletons.innerHTML = `<div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div>`;
   let startSport = sportFromPath() || 1;
@@ -628,6 +848,7 @@ async function boot() {
   } catch (err) {
     console.warn("i18n init", err);
   }
+  renderDateRail();
   try {
     const cfg = await fetch("/api/site-config.json").then((r) => r.json());
     applySiteConfig(cfg);
@@ -636,6 +857,7 @@ async function boot() {
     /* theme.css still applies defaults */
   }
   try {
+    await loadOverviewMarkets();
     const sports = await api("/sports/today");
     state.sports = Array.isArray(sports) ? sports : [];
     const preferred = state.sports.find((s) => Number(s.id) === Number(startSport)) || state.sports[0];
@@ -652,12 +874,5 @@ async function boot() {
 boot();
 setInterval(() => {
   if (document.hidden) return;
-  api(`/fixtures/${state.sportId}/daterange/0`)
-    .then((fixtures) => {
-      if (Array.isArray(fixtures)) {
-        state.fixtures = fixtures;
-        renderFeed();
-      }
-    })
-    .catch(() => {});
+  reloadFixtures();
 }, 45000);

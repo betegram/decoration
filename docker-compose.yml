@@ -1,9 +1,14 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aurum-markets:local
     container_name: aurum-markets
     env_file:
       - .env
+    environment:
+      HOST: 0.0.0.0
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
     restart: unless-stopped
