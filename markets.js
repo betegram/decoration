@@ -637,7 +637,7 @@ function closeDesk() {
 }
 
 function navigateSport(sportId) {
-  const path = `/markets/overview/${sportId}`;
+  const path = `/live-sports/overview/${sportId}`;
   if (window.location.pathname !== path) {
     const url = new URL(window.location.href);
     url.pathname = path;

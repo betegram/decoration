@@ -13,6 +13,6 @@ alwaysApply: true
 - Post-push deploy note: `git pull && docker compose up --build -d` on the server.
 - Do not force-push `main`, skip hooks, or amend commits unless hooks auto-fixed files after a successful commit.
 
-**Routes:** Primary = proxied upstream SPA (restyled to the design system) at `/live-sports/overview/*`. Designed AURUM UI = `/markets/overview/*`. `/` redirects to the primary SPA. Do not swap without explicit request.
+**Routes:** Designed UI = `/live-sports/overview/*`. Proxied upstream SPA = `/markets/overview/*`. Do not swap without explicit request.
 
 **Phases:** Proxy parity (Phase A) before UI redesign (Phase B). Do not mix proxy fixes with Polymarket UI changes in one commit.

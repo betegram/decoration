@@ -46,11 +46,8 @@ const HOST = process.env.HOST || "0.0.0.0";
 const UPSTREAM = process.env.UPSTREAM || "https://iframedev1.thesportslab.eu";
 const BS = process.env.BS_UPSTREAM || "https://bs-iframedev1.thesportslab.eu";
 const BS_WS_ORIGIN = BS.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
-// Primary experience = proxied upstream sportsbook SPA (restyled to the design
-// system) at /live-sports/overview/*. The custom designed AURUM UI lives at
-// /markets/overview/*.
-const DESIGNED_OVERVIEW_RE = /^\/markets\/overview\/\d+\/?$/;
-const DESIGNED_OVERVIEW_PATH = "/markets/overview/1";
+const LIVE_OVERVIEW_RE = /^\/live-sports\/overview\/\d+\/?$/;
+const PROXY_OVERVIEW_PATH = "/markets/overview/1";
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 " +
   "(KHTML, like Gecko) Version/17.0 Safari/605.1.15";
@@ -489,8 +486,8 @@ async function handleAdminApi(req, res, pathname, method) {
         presets: LAYOUT_PRESETS,
         themes: THEME_PRESETS,
         fonts: Object.keys(FONT_STACKS),
-        sharedUrl: links.secondary.url,
-        proxyReferenceUrl: links.primary.url,
+        sharedUrl: links.primary.url,
+        proxyReferenceUrl: links.secondary.url,
         originalUrl: `${UPSTREAM}${sharedPath(1)}`,
         links,
         upstream: UPSTREAM,
@@ -645,8 +642,8 @@ const server = createServer(async (req, res) => {
         flagBase: "/api/flag",
         wsUrl: `${proto}://${host}`,
         wsPath: "/socket/",
-        designedPath: DESIGNED_OVERVIEW_PATH,
-        proxyPath: sharedPath(1),
+        designedPath: sharedPath(1),
+        proxyPath: PROXY_OVERVIEW_PATH,
         upstream: UPSTREAM,
         bsUpstream: BS,
       }),
@@ -715,17 +712,16 @@ const server = createServer(async (req, res) => {
       redirect(res, sharedPath(1));
       return;
     }
-    if (DESIGNED_OVERVIEW_RE.test(pathname)) {
+    if (pathname === "/live-sports/overview" || pathname === "/live-sports/overview/") {
+      redirect(res, sharedPath(1));
+      return;
+    }
+    if (LIVE_OVERVIEW_RE.test(pathname)) {
       await serveMarketsShell(res, method);
       return;
     }
-    if (
-      pathname === "/markets" ||
-      pathname === "/markets/" ||
-      pathname === "/markets/overview" ||
-      pathname === "/markets/overview/"
-    ) {
-      redirect(res, DESIGNED_OVERVIEW_PATH);
+    if (pathname === "/markets" || pathname === "/markets/") {
+      redirect(res, PROXY_OVERVIEW_PATH);
       return;
     }
   }
@@ -744,8 +740,8 @@ async function start() {
   attachSocketProxy(server);
   server.listen(PORT, HOST, async () => {
     await refreshConfig();
-    console.log(`Primary (SPA)  → http://localhost:${PORT}${sharedPath(1)}`);
-    console.log(`Designed UI    → http://localhost:${PORT}${DESIGNED_OVERVIEW_PATH}`);
+    console.log(`Designed UI    → http://localhost:${PORT}${sharedPath(1)}`);
+    console.log(`Proxy reference→ http://localhost:${PORT}${PROXY_OVERVIEW_PATH}`);
     if (PROXY_DEBUG) console.log("Proxy debug logging enabled (PROXY_DEBUG=true)");
     console.log(`Admin panel    → http://localhost:${PORT}/admin`);
     console.log(`Original path  → ${UPSTREAM}${sharedPath(1)}`);
