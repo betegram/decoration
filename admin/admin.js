@@ -121,7 +121,15 @@ const SECTIONS = {
     desc: "Public URL mirrors the original site path",
     shareOnly: true,
   },
+  languages: {
+    title: "Languages & translations",
+    desc: "Default locale, enabled languages, and AI-assisted translations",
+    languagesOnly: true,
+  },
 };
+
+let langEditLocale = "en";
+let langEditScope = "site";
 
 function get(obj, path) {
   return path.split(".").reduce((a, k) => (a == null ? undefined : a[k]), obj);
@@ -166,6 +174,11 @@ function renderPanel() {
   sectionTitle.textContent = def.title;
   sectionDesc.textContent = def.desc;
   panel.innerHTML = "";
+
+  if (def.languagesOnly) {
+    renderLanguagesPanel();
+    return;
+  }
 
   if (def.themes && meta?.themes) {
     const wrap = document.createElement("div");
@@ -280,13 +293,208 @@ function renderPanel() {
   });
 }
 
+function ensureI18nConfig() {
+  if (!config.i18n) config.i18n = { defaultLocale: "en", enabledLocales: ["en"] };
+  if (!config.i18n.defaultLocale) config.i18n.defaultLocale = "en";
+  if (!Array.isArray(config.i18n.enabledLocales)) config.i18n.enabledLocales = ["en"];
+  if (!config.translations) config.translations = {};
+  for (const loc of config.i18n.enabledLocales) {
+    if (!config.translations[loc]) config.translations[loc] = {};
+  }
+  if (!langEditLocale || !config.i18n.enabledLocales.includes(langEditLocale)) {
+    langEditLocale = config.i18n.defaultLocale;
+  }
+}
+
+function catalogItemsForScope(scope) {
+  const site = meta?.i18n?.catalog || [];
+  const admin = meta?.i18n?.adminCatalog || [];
+  if (scope === "site") return site;
+  if (scope === "admin") return admin;
+  return [...site, ...admin];
+}
+
+function renderLanguagesPanel() {
+  ensureI18nConfig();
+  const locales = meta?.i18n?.locales || {};
+  const enabled = config.i18n.enabledLocales;
+  const openAi = meta?.i18n?.openAi;
+
+  const settings = document.createElement("div");
+  settings.className = "field-card full";
+  settings.innerHTML = `<h3>Language settings</h3>
+    <div class="field-grid">
+      <label>Default language
+        <select id="defaultLocaleSel"></select>
+      </label>
+    </div>
+    <div class="lang-enabled-wrap"><span class="hint">Enabled languages (public switcher + translations)</span>
+      <div class="lang-enabled" id="enabledLocales"></div>
+    </div>
+    ${openAi ? "" : "<p class='hint warn'>Set <code>OPENAI_API_KEY</code> in .env to enable AI translation.</p>"}`;
+  panel.appendChild(settings);
+
+  const defaultSel = settings.querySelector("#defaultLocaleSel");
+  Object.entries(locales).forEach(([code, m]) => {
+    const opt = document.createElement("option");
+    opt.value = code;
+    opt.textContent = `${m.native || m.label} (${code})`;
+    if (code === config.i18n.defaultLocale) opt.selected = true;
+    defaultSel.appendChild(opt);
+  });
+  defaultSel.addEventListener("change", () => {
+    config.i18n.defaultLocale = defaultSel.value;
+    if (!config.i18n.enabledLocales.includes(defaultSel.value)) {
+      config.i18n.enabledLocales.unshift(defaultSel.value);
+    }
+    langEditLocale = defaultSel.value;
+    renderPanel();
+  });
+
+  const enabledWrap = settings.querySelector("#enabledLocales");
+  Object.entries(locales).forEach(([code, m]) => {
+    const on = enabled.includes(code);
+    const label = document.createElement("label");
+    label.className = "lang-check";
+    label.innerHTML = `<input type="checkbox" data-locale="${code}" ${on ? "checked" : ""} /> ${m.native || m.label}`;
+    label.querySelector("input").addEventListener("change", (e) => {
+      const checked = e.target.checked;
+      if (checked && !config.i18n.enabledLocales.includes(code)) {
+        config.i18n.enabledLocales.push(code);
+        if (!config.translations[code]) config.translations[code] = {};
+      } else if (!checked) {
+        config.i18n.enabledLocales = config.i18n.enabledLocales.filter((c) => c !== code);
+        if (config.i18n.defaultLocale === code) config.i18n.defaultLocale = "en";
+      }
+      renderPanel();
+    });
+    enabledWrap.appendChild(label);
+  });
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "field-card full lang-toolbar";
+  toolbar.innerHTML = `
+    <h3>Edit translations</h3>
+    <div class="lang-toolbar-row">
+      <label>Locale <select id="editLocaleSel"></select></label>
+      <label>Scope <select id="editScopeSel">
+        <option value="site">Public site</option>
+        <option value="admin">Admin panel</option>
+        <option value="all">All strings</option>
+      </select></label>
+      <button type="button" class="btn ghost" id="aiTranslateBtn" ${openAi ? "" : "disabled"}>AI translate missing</button>
+      <button type="button" class="btn ghost" id="aiTranslateAllBtn" ${openAi ? "" : "disabled"}>AI translate all enabled</button>
+    </div>`;
+  panel.appendChild(toolbar);
+
+  const editSel = toolbar.querySelector("#editLocaleSel");
+  enabled.forEach((code) => {
+    const opt = document.createElement("option");
+    opt.value = code;
+    opt.textContent = locales[code]?.native || code;
+    if (code === langEditLocale) opt.selected = true;
+    editSel.appendChild(opt);
+  });
+  editSel.addEventListener("change", () => {
+    langEditLocale = editSel.value;
+    renderPanel();
+  });
+  const scopeSel = toolbar.querySelector("#editScopeSel");
+  scopeSel.value = langEditScope;
+  scopeSel.addEventListener("change", () => {
+    langEditScope = scopeSel.value;
+    renderPanel();
+  });
+
+  toolbar.querySelector("#aiTranslateBtn").addEventListener("click", async () => {
+    try {
+      const res = await api("/admin/api/i18n/translate", {
+        method: "POST",
+        body: JSON.stringify({ locale: langEditLocale, scope: langEditScope }),
+      });
+      if (!config.translations[langEditLocale]) config.translations[langEditLocale] = {};
+      Object.assign(config.translations[langEditLocale], res.patch);
+      showToast(`AI translated ${res.translated} strings — click Apply to publish`);
+      renderPanel();
+    } catch (err) {
+      showToast(err.message || "AI translation failed");
+    }
+  });
+
+  toolbar.querySelector("#aiTranslateAllBtn").addEventListener("click", async () => {
+    const targets = config.i18n.enabledLocales.filter((c) => c !== config.i18n.defaultLocale);
+    if (!targets.length) {
+      showToast("No extra locales enabled");
+      return;
+    }
+    try {
+      let total = 0;
+      for (const loc of targets) {
+        const res = await api("/admin/api/i18n/translate", {
+          method: "POST",
+          body: JSON.stringify({ locale: loc, scope: "all" }),
+        });
+        if (!config.translations[loc]) config.translations[loc] = {};
+        Object.assign(config.translations[loc], res.patch);
+        total += res.translated || 0;
+      }
+      showToast(`AI translated ${total} strings across ${targets.length} languages — Apply to publish`);
+      renderPanel();
+    } catch (err) {
+      showToast(err.message || "AI translation failed");
+    }
+  });
+
+  const refLocale = config.i18n.defaultLocale;
+  const refBundle = config.translations[refLocale] || {};
+  const targetBundle = config.translations[langEditLocale] || {};
+  const items = catalogItemsForScope(langEditScope);
+  const groups = new Map();
+  items.forEach((item) => {
+    if (!groups.has(item.group)) groups.set(item.group, []);
+    groups.get(item.group).push(item);
+  });
+
+  for (const [groupName, groupItems] of groups) {
+    const card = document.createElement("div");
+    card.className = "field-card full";
+    card.innerHTML = `<h3>${groupName}</h3><div class="i18n-table-wrap"><table class="i18n-table"><thead><tr><th>Key</th><th>Reference (${refLocale})</th><th>Translation (${langEditLocale})</th></tr></thead><tbody></tbody></table></div>`;
+    const tbody = card.querySelector("tbody");
+    groupItems.forEach((item) => {
+      const tr = document.createElement("tr");
+      const ref = refBundle[item.key] || item.default;
+      const val = targetBundle[item.key] || "";
+      tr.innerHTML = `<td class="i18n-key"><code>${item.key}</code><span>${item.label}</span></td>
+        <td class="i18n-ref">${escHtml(ref)}</td>
+        <td><textarea rows="${String(ref).length > 60 ? 2 : 1}" data-i18n-key="${item.key}">${escHtml(val)}</textarea></td>`;
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll("textarea").forEach((ta) => {
+      ta.addEventListener("input", () => {
+        if (!config.translations[langEditLocale]) config.translations[langEditLocale] = {};
+        config.translations[langEditLocale][ta.dataset.i18nKey] = ta.value;
+      });
+    });
+    panel.appendChild(card);
+  }
+}
+
+function escHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function copyText(text) {
   navigator.clipboard.writeText(text).then(() => showToast("Copied to clipboard"));
 }
 
 function refreshPreview() {
-  const url = meta?.sharedUrl || "/live-sports/overview/1";
-  previewFrame.src = `${url}?t=${Date.now()}`;
+  const base = meta?.marketsPreviewUrl || "/markets/overview/1";
+  const lang = langEditLocale || config?.i18n?.defaultLocale || "en";
+  previewFrame.src = `${base}?lang=${encodeURIComponent(lang)}&t=${Date.now()}`;
 }
 
 async function loadApp() {

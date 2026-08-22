@@ -33,6 +33,16 @@ When `MONGODB_URI` is set, site config and admin credentials are stored in Mongo
 | `MONGODB_DB` | Database name (default `aurum_markets`) |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Admin panel login |
 | `UPSTREAM` / `BS_UPSTREAM` | Sportsbook API hosts (optional) |
+| `OVERVIEW_SHELL` | `proxy` (original SPA at `/live-sports/overview/*`) or `custom` (AURUM UI) |
+| `OPENAI_API_KEY` | Enables AI translation in Admin → Languages |
+| `OPENAI_MODEL` | OpenAI model (default `gpt-4o-mini`) |
+
+### Multilingual
+
+- **Admin → Languages:** default locale, enabled languages, manual edits, **AI translate missing** (OpenAI).
+- **Public site** (`/markets/overview/1`): language switcher in header; strings from MongoDB/config.
+- **Cookie:** `aurum_lang`; query `?lang=tr` also works.
+- Proxied overview SPA (`OVERVIEW_SHELL=proxy`) uses upstream UI language — use `/markets` for full i18n.
 
 ### Nginx (ui.kycland.xyz)
 

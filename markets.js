@@ -1,9 +1,13 @@
 /* AURUM Markets — discovery product powered by sportsbook data engine */
 
-const API = "/api/bs";
-const FLAG = "/api/flag";
-const WS_URL = "https://bs-iframedev1.thesportslab.eu";
-const WS_PATH = "/socket/";
+function tr(key, vars) {
+  return window.AurumI18n?.t(key, vars) ?? key;
+}
+
+let API = "/api/bs";
+let FLAG = "/api/flag";
+let WS_URL = "https://bs-iframedev1.thesportslab.eu";
+let WS_PATH = "/socket/";
 
 const state = {
   sports: [],
@@ -67,11 +71,25 @@ function initials(name = "") {
 }
 
 async function api(path) {
-  const res = await fetch(`${API}${path}`, {
-    headers: { Accept: "application/json", "utc-offset": offset },
-  });
-  if (!res.ok) throw new Error(`${path} → ${res.status}`);
-  return res.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120000);
+  try {
+    const res = await fetch(`${API}${path}`, {
+      headers: { Accept: "application/json", "utc-offset": offset },
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`${path} → ${res.status}${text ? `: ${text.slice(0, 120)}` : ""}`);
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`${path} → invalid JSON (${text.slice(0, 120)}…)`);
+    }
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function flagUrl(path) {
@@ -172,9 +190,11 @@ function normalizeSelections(list, fx) {
 
 /** Fallback synthetic labels when live odds not yet streamed */
 function placeholderMarkets(fx) {
-  const [home, away] = fx.participants || ["Home", "Away"];
+  const [home, away] = fx.participants || [tr("site.home"), tr("site.away")];
   const three = fx.sport_id === 1 || /soccer|football/i.test(fx.sport_name || "");
-  const labels = three ? [home.split(" ")[0] || "1", "Draw", away.split(" ")[0] || "2"] : [home.split(" ")[0] || "1", away.split(" ")[0] || "2"];
+  const labels = three
+    ? [home.split(" ")[0] || "1", tr("site.draw"), away.split(" ")[0] || "2"]
+    : [home.split(" ")[0] || "1", away.split(" ")[0] || "2"];
   return labels.map((label, idx) => ({
     uuid: `pending-${fx.id}-${idx}`,
     label,
@@ -242,9 +262,9 @@ function renderSports() {
 function renderFilters() {
   const comps = state.featuredComps.slice(0, 10);
   const chips = [
-    { id: "all", label: "All" },
-    { id: "live", label: "Live now" },
-    { id: "upcoming", label: "Upcoming" },
+    { id: "all", label: tr("site.filter_all") },
+    { id: "live", label: tr("site.filter_live") },
+    { id: "upcoming", label: tr("site.filter_upcoming") },
     ...comps.map((c) => ({ id: String(c.id), label: c.name })),
   ];
   el.filterRail.innerHTML = chips
@@ -256,14 +276,14 @@ function renderFilters() {
 }
 
 function cardHTML(fx) {
-  const [home, away] = fx.participants || ["Home", "Away"];
+  const [home, away] = fx.participants || [tr("site.home"), tr("site.away")];
   const logos = fx.participant_logos || {};
   const [h, a] = scoreOf(fx);
   const live = !!fx.live;
   const showScore = live || h > 0 || a > 0;
   let mkts = marketsFromOverview(fx.id);
   if (!mkts || !mkts.length) mkts = placeholderMarkets(fx);
-  const clock = live ? fx.time || fx.statistics?.half || fx.status || "LIVE" : fmtTime(fx.start_datetime);
+  const clock = live ? fx.time || fx.statistics?.half || fx.status || tr("site.live_badge") : fmtTime(fx.start_datetime);
 
   const mktHtml = mkts
     .map((m) => {
@@ -290,30 +310,49 @@ function cardHTML(fx) {
     </div>
     <div class="markets">${mktHtml}</div>
     <div class="card-foot">
-      <span class="status-line">${esc(fx.status || (live ? "In play" : "Scheduled"))}</span>
-      <button type="button" class="more-btn" data-desk="${esc(fx.id)}" data-title="${esc(`${home} vs ${away}`)}">Full markets →</button>
+      <span class="status-line">${esc(fx.status || (live ? tr("site.in_play") : tr("site.scheduled")))}</span>
+      <button type="button" class="more-btn" data-desk="${esc(fx.id)}" data-title="${esc(`${home} vs ${away}`)}">${esc(tr("site.full_markets"))}</button>
     </div>
   </article>`;
 }
 
+function showLoadError(title, detail) {
+  state.loading = false;
+  el.skeletons.hidden = true;
+  el.groups.innerHTML = "";
+  el.empty.hidden = false;
+  el.empty.innerHTML = `<h3>${esc(title)}</h3><p>${esc(detail)}</p>`;
+}
+
 function renderFeed() {
+  try {
+    renderFeedInner();
+  } catch (err) {
+    console.error("renderFeed", err);
+    showLoadError(tr("site.error_render_markets"), err.message || "Unknown render error");
+  }
+}
+
+function renderFeedInner() {
   const list = filteredFixtures();
   const liveN = state.fixtures.filter((f) => f.live).length;
   el.liveCount.textContent = String(liveN);
 
   const sport = state.sports.find((s) => Number(s.id) === Number(state.sportId));
   el.feedTitle.textContent = sport ? `${sport.name} ${state.feedLabel}` : state.feedLabel.charAt(0).toUpperCase() + state.feedLabel.slice(1);
-  el.feedSub.textContent = `${list.length} events · ${liveN} live`;
+  el.feedSub.textContent = tr("site.events_live_count", { count: list.length, live: liveN });
 
   // Featured: live non-esports first
   const featured = state.fixtures
     .filter((f) => f.live && !isEsports(f))
     .concat(state.fixtures.filter((f) => f.live && isEsports(f)))
     .slice(0, 8);
-  el.featuredSub.textContent = featured.length ? `${featured.length} in play` : "Waiting for kickoff";
+  el.featuredSub.textContent = featured.length
+    ? tr("site.featured_in_play", { count: featured.length })
+    : tr("site.waiting_kickoff");
   el.featuredTrack.innerHTML = featured.length
     ? featured.map(cardHTML).join("")
-    : `<div class="card"><p class="ticket-empty">No live events in this sport right now.</p></div>`;
+    : `<div class="card"><p class="ticket-empty">${esc(tr("site.no_live_events"))}</p></div>`;
 
   if (state.loading) {
     el.skeletons.hidden = false;
@@ -347,7 +386,7 @@ function renderTicket() {
   el.ticketCount.textContent = String(state.ticket.length);
   el.fabCount.textContent = String(state.ticket.length);
   if (!state.ticket.length) {
-    el.ticketBody.innerHTML = `<p class="ticket-empty">Select a market outcome to build your ticket.</p>`;
+    el.ticketBody.innerHTML = `<p class="ticket-empty">${esc(tr("site.ticket_empty"))}</p>`;
     el.openTrade.disabled = true;
     el.potentialReturn.textContent = "—";
     return;
@@ -356,7 +395,7 @@ function renderTicket() {
     .map(
       (t, i) => `<div class="pick">
       <div class="meta">${esc(t.eventLabel)}</div>
-      <div class="row"><div class="sel">${esc(t.label)}</div><button type="button" data-remove="${i}" aria-label="Remove">✕</button></div>
+      <div class="row"><div class="sel">${esc(t.label)}</div><button type="button" data-remove="${i}" aria-label="${esc(tr("site.remove_pick_aria"))}">✕</button></div>
       <div class="meta">@ ${t.price != null ? Number(t.price).toFixed(2) : "—"}</div>
     </div>`
     )
@@ -386,7 +425,7 @@ function addPick({ fixtureId, uuid, label, price, eventLabel }) {
 }
 
 function openDesk(fixtureId, title) {
-  el.deskTitle.textContent = title || "Event desk";
+  el.deskTitle.textContent = title || tr("site.event_desk_title");
   el.deskFrame.src = `/live-sports/event-view/${fixtureId}`;
   el.desk.hidden = false;
   document.body.style.overflow = "hidden";
@@ -422,7 +461,7 @@ async function loadSport(sportId) {
     console.error(err);
     state.loading = false;
     state.fixtures = [];
-    renderFeed();
+    showLoadError(tr("site.error_load_fixtures"), err.message || "API request failed");
   }
 }
 
@@ -543,19 +582,30 @@ el.fabTicket.addEventListener("click", () => {
 });
 
 function sportFromPath() {
-  const m = window.location.pathname.match(/\/live-sports\/overview\/(\d+)/);
+  const m =
+    window.location.pathname.match(/\/live-sports\/overview\/(\d+)/) ||
+    window.location.pathname.match(/\/markets\/overview\/(\d+)/);
   return m ? Number(m[1]) : null;
+}
+
+async function loadRuntimeConfig() {
+  try {
+    const cfg = await fetch("/api/runtime-config.json").then((r) => r.json());
+    if (cfg.apiBase) API = cfg.apiBase;
+    if (cfg.flagBase) FLAG = cfg.flagBase;
+    if (cfg.wsUrl) WS_URL = cfg.wsUrl.replace(/\/$/, "");
+    if (cfg.wsPath) WS_PATH = cfg.wsPath;
+  } catch {
+    /* defaults */
+  }
 }
 
 function applySiteConfig(cfg) {
   if (!cfg) return;
-  document.title = cfg.branding?.pageTitle || document.title;
-  if (el.brandName) el.brandName.textContent = cfg.branding?.name || "AURUM";
-  if (el.brandTag) el.brandTag.textContent = cfg.branding?.tag || "Markets";
-  if (el.searchInput) el.searchInput.placeholder = cfg.branding?.searchPlaceholder || el.searchInput.placeholder;
-  if (el.featuredTitle) el.featuredTitle.textContent = cfg.branding?.featuredTitle || "Live now";
-  if (el.featuredSub) el.featuredSub.textContent = cfg.branding?.featuredSub || el.featuredSub.textContent;
-  state.feedLabel = (cfg.branding?.feedTitle || "Markets").toLowerCase();
+  document.title = tr("site.page_title");
+  if (el.brandName) el.brandName.textContent = tr("site.brand_name");
+  if (el.brandTag) el.brandTag.textContent = tr("site.brand_tag");
+  state.feedLabel = tr("site.markets_label");
 
   document.body.className = "";
   const themePreset = cfg.theme?.preset || "polymarket";
@@ -570,9 +620,18 @@ async function boot() {
   el.skeletons.hidden = false;
   el.skeletons.innerHTML = `<div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div>`;
   let startSport = sportFromPath() || 1;
+  await loadRuntimeConfig();
+  try {
+    await window.AurumI18n.initI18n();
+    window.AurumI18n.applyDomI18n();
+    window.AurumI18n.renderLangSwitcher(document.getElementById("langSwitcher"));
+  } catch (err) {
+    console.warn("i18n init", err);
+  }
   try {
     const cfg = await fetch("/api/site-config.json").then((r) => r.json());
     applySiteConfig(cfg);
+    window.AurumI18n?.applyDomI18n();
   } catch {
     /* theme.css still applies defaults */
   }
@@ -580,14 +639,12 @@ async function boot() {
     const sports = await api("/sports/today");
     state.sports = Array.isArray(sports) ? sports : [];
     const preferred = state.sports.find((s) => Number(s.id) === Number(startSport)) || state.sports[0];
-    if (!preferred) throw new Error("No sports");
+    if (!preferred) throw new Error("No sports returned from API");
+    renderSports();
     await loadSport(preferred.id);
   } catch (err) {
     console.error(err);
-    state.loading = false;
-    el.groups.innerHTML = "";
-    el.empty.hidden = false;
-    el.empty.innerHTML = `<h3>Could not load markets</h3><p>${esc(err.message)}. Is the server running?</p>`;
+    showLoadError(tr("site.error_load_markets"), err.message || "API request failed");
   }
   renderTicket();
 }

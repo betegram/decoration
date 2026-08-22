@@ -297,6 +297,26 @@ textarea { min-height: 88px; padding-top: 0.65rem; height: auto; resize: vertica
   padding: 0.75rem 1rem; border-radius: 10px; font-size: 0.85rem; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 }
 
+.hint.warn { color: #b45309; background: #fffbeb; padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid #fcd34d; }
+.lang-enabled-wrap { margin-top: 0.75rem; }
+.lang-enabled { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-top: 0.35rem; }
+.lang-check { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
+.lang-toolbar-row {
+  display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin-top: 0.5rem;
+}
+.lang-toolbar-row label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.78rem; color: var(--muted); }
+.i18n-table-wrap { overflow: auto; max-height: 52vh; border: 1px solid var(--line); border-radius: 10px; }
+.i18n-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.i18n-table th, .i18n-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.i18n-table th { text-align: left; background: #f8fafc; font-weight: 650; position: sticky; top: 0; }
+.i18n-key code { font-size: 0.72rem; color: #475569; }
+.i18n-key span { display: block; font-size: 0.72rem; color: var(--muted); margin-top: 0.15rem; }
+.i18n-ref { color: var(--muted); max-width: 220px; }
+.i18n-table textarea {
+  width: 100%; min-width: 180px; border: 1px solid var(--line); border-radius: 8px;
+  padding: 0.45rem 0.5rem; font: inherit; resize: vertical;
+}
+
 @media (max-width: 900px) {
   .ig-login-wrap { grid-template-columns: 1fr; }
   .ig-promo { padding: 1.5rem; }

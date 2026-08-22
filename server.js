@@ -16,12 +16,25 @@ import {
 } from "./lib/config.js";
 import { THEME_PRESETS } from "./lib/themes.js";
 import { initStore, loadSiteConfig, saveSiteConfig, loadAdminAuth, closeStore } from "./lib/store.js";
+import {
+  LOCALE_META,
+  STRING_CATALOG,
+  catalogForScope,
+  defaultEnglishBundle,
+  normalizeSiteConfig,
+  publicBundle,
+  adminBundle,
+  resolveLocale,
+  keysForAiTranslate,
+} from "./lib/i18n.js";
+import { translateWithOpenAI, isOpenAiConfigured } from "./lib/openai.js";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.HOST || "0.0.0.0";
 const UPSTREAM = process.env.UPSTREAM || "https://iframedev1.thesportslab.eu";
 const BS = process.env.BS_UPSTREAM || "https://bs-iframedev1.thesportslab.eu";
+const OVERVIEW_SHELL = (process.env.OVERVIEW_SHELL || "proxy").toLowerCase();
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 " +
   "(KHTML, like Gecko) Version/17.0 Safari/605.1.15";
@@ -49,6 +62,8 @@ const STATIC = {
   "/index.html": "index.html",
   "/markets.js": "markets.js",
   "/styles.css": "styles.css",
+  "/board.css": "board.css",
+  "/i18n-client.js": "i18n-client.js",
 };
 
 const sessions = new Map();
@@ -185,7 +200,8 @@ async function serveMarketsShell(res, method) {
 }
 
 async function proxyApi(req, res, base, origin) {
-  const suffix = req.url.split("?")[0].slice(base.length) || "/";
+  const raw = req.url.slice(base.length) || "/";
+  const suffix = raw.startsWith("/") ? raw : `/${raw}`;
   const headers = {
     Accept: "application/json",
     Origin: UPSTREAM,
@@ -298,6 +314,7 @@ async function handleAdminApi(req, res, pathname, method) {
   if (pathname === "/admin/api/meta" && method === "GET") {
     const host = req.headers.host || `localhost:${PORT}`;
     const proto = req.headers["x-forwarded-proto"] || "http";
+    const adminLocale = resolveLocale(req, await getConfig());
     send(
       res,
       200,
@@ -306,12 +323,61 @@ async function handleAdminApi(req, res, pathname, method) {
         themes: THEME_PRESETS,
         fonts: Object.keys(FONT_STACKS),
         sharedUrl: `${proto}://${host}${sharedPath(1)}`,
+        marketsPreviewUrl: `${proto}://${host}/markets/overview/1`,
         originalUrl: `${UPSTREAM}${sharedPath(1)}`,
         upstream: UPSTREAM,
+        i18n: {
+          locales: LOCALE_META,
+          catalog: catalogForScope("site"),
+          adminCatalog: catalogForScope("admin"),
+          openAi: isOpenAiConfigured(),
+          defaultLocale: (await getConfig()).i18n?.defaultLocale,
+        },
+        adminI18n: adminBundle(await getConfig(), adminLocale),
       }),
       "application/json",
       method
     );
+    return true;
+  }
+
+  if (pathname === "/admin/api/i18n/translate" && method === "POST") {
+    const body = await readJson(req);
+    const targetLocale = String(body.locale || "").trim();
+    const scope = String(body.scope || "all");
+    if (!targetLocale) {
+      send(res, 400, JSON.stringify({ error: "locale required" }), "application/json", method);
+      return true;
+    }
+    if (!isOpenAiConfigured()) {
+      send(res, 503, JSON.stringify({ error: "OPENAI_API_KEY not configured" }), "application/json", method);
+      return true;
+    }
+    const config = await getConfig();
+    const items = keysForAiTranslate(config, targetLocale, scope);
+    if (!Object.keys(items).length) {
+      send(res, 200, JSON.stringify({ ok: true, translated: 0, patch: {} }), "application/json", method);
+      return true;
+    }
+    try {
+      const meta = LOCALE_META[targetLocale];
+      const translated = await translateWithOpenAI({
+        sourceLocale: config.i18n.defaultLocale,
+        targetLocale,
+        targetLabel: meta?.label || targetLocale,
+        items,
+      });
+      send(
+        res,
+        200,
+        JSON.stringify({ ok: true, translated: Object.keys(translated).length, patch: translated }),
+        "application/json",
+        method
+      );
+    } catch (err) {
+      send(res, 502, JSON.stringify({ error: err.message }), "application/json", method);
+      return true;
+    }
     return true;
   }
 
@@ -337,6 +403,33 @@ const server = createServer(async (req, res) => {
   if (pathname === "/api/site-config.json" && method === "GET") {
     const config = await getConfig();
     send(res, 200, JSON.stringify(config), "application/json", method);
+    return;
+  }
+
+  if (pathname === "/api/runtime-config.json" && method === "GET") {
+    send(
+      res,
+      200,
+      JSON.stringify({
+        apiBase: "/api/bs",
+        flagBase: "/api/flag",
+        wsUrl: BS,
+        wsPath: "/socket/",
+        overviewShell: OVERVIEW_SHELL,
+        upstream: UPSTREAM,
+        bsUpstream: BS,
+      }),
+      "application/json",
+      method
+    );
+    return;
+  }
+
+  if (pathname === "/api/i18n.json" && method === "GET") {
+    const config = await getConfig();
+    const locale = resolveLocale(req, config);
+    const bundle = publicBundle(config, locale);
+    send(res, 200, JSON.stringify(bundle), "application/json", method);
     return;
   }
 
@@ -387,7 +480,11 @@ const server = createServer(async (req, res) => {
       redirect(res, sharedPath(1));
       return;
     }
-    if (/^\/live-sports\/overview\/\d+\/?$/.test(pathname)) {
+    if (OVERVIEW_SHELL === "custom" && /^\/live-sports\/overview\/\d+\/?$/.test(pathname)) {
+      await serveMarketsShell(res, method);
+      return;
+    }
+    if (pathname === "/markets" || /^\/markets\/overview\/\d+\/?$/.test(pathname)) {
       await serveMarketsShell(res, method);
       return;
     }
@@ -407,6 +504,7 @@ async function start() {
   server.listen(PORT, HOST, async () => {
     await refreshConfig();
     console.log(`AURUM Markets  → http://localhost:${PORT}${sharedPath(1)}`);
+    console.log(`Overview shell → ${OVERVIEW_SHELL} (${OVERVIEW_SHELL === "proxy" ? "original sportsbook SPA" : "custom markets UI"})`);
     console.log(`Admin panel    → http://localhost:${PORT}/admin`);
     console.log(`Original path  → ${UPSTREAM}${sharedPath(1)}`);
   });
